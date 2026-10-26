@@ -99,6 +99,29 @@ describe('power-flow-multi-card', () => {
     expect(Math.abs((cy - iconTop) - (baseline - cy))).toBeLessThanOrEqual(1);
   });
 
+  it('keeps the Solar and Battery names close to their circles', async () => {
+    const el = await mount(full, fullStates);
+    for (const [name, c] of [['Solar', { x: 170, y: 95 }], ['Battery', { x: 170, y: 325 }]] as const) {
+      const t = q(el, 'text.label').find((x) => x.textContent === name)!;
+      const d = Math.hypot(Number(t.getAttribute('x')) - c.x, Number(t.getAttribute('y')) - c.y);
+      expect(d).toBeLessThanOrEqual(32 + 14);
+    }
+  });
+
+  it('shows the battery SoC above an icon that follows the charge, with the flows below', async () => {
+    const el = await mount(full, fullStates);
+    const b = q(el, '[data-node="battery"]')[0];
+    const icon = b.querySelector('ha-icon') as HTMLElement & { icon: string };
+    expect(icon.icon).toBe('mdi:battery-60');
+    const fo = b.querySelector('foreignObject')!;
+    const texts = Array.from(b.querySelectorAll('text.value'));
+    expect(texts.map((t) => t.getAttribute('font-size'))).toEqual(['10', '10', '10']);
+    const iconTop = Number(fo.getAttribute('y'));
+    const iconBottom = iconTop + Number(fo.getAttribute('height'));
+    expect(Number(texts[0].getAttribute('y'))).toBeLessThan(iconTop);
+    expect(Number(texts[1].getAttribute('y')) - 7).toBeGreaterThan(iconBottom);
+  });
+
   it('omits optional sections cleanly', async () => {
     const el = await mount({ type: 'custom:power-flow-multi-card', grid: { entity: 'sensor.grid' } }, { 'sensor.grid': '100' });
     expect(q(el, '[data-node="battery"]')).toHaveLength(0);
