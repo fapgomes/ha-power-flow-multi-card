@@ -53,10 +53,10 @@ describe('viewBox', () => {
 });
 
 describe('pillRow', () => {
-  it('keeps 35 spacing for few pills', () => {
+  it('keeps 42 spacing and radius 16 for few pills', () => {
     const p = pillRow(3, 170, 22, 230);
-    expect(p.map((x) => x.x)).toEqual([135, 170, 205]);
-    expect(p.every((x) => x.r === 12 && x.y === 22)).toBe(true);
+    expect(p.map((x) => x.x)).toEqual([128, 170, 212]);
+    expect(p.every((x) => x.r === 16 && x.y === 22)).toBe(true);
   });
   it('shrinks to fit many pills', () => {
     const p = pillRow(8, 170, 22, 230);

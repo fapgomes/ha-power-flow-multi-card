@@ -17,6 +17,8 @@ export const NODES = {
 export const SOLAR_PILLS_Y = 22;
 export const BANK_PILLS_Y = 392;
 export const PILLS_MAX_WIDTH = 230;
+/** Radius of solar source, battery bank and child consumer pills. */
+export const PILL_R = 16;
 
 export const NORMAL_R = 32;
 export const SMALL_R = 20;
@@ -172,7 +174,7 @@ export function placeSatellite(parent: Circle, r: number, obstacles: Obstacles, 
 
 /** A centred row of small pills that shrinks to fit maxWidth. */
 export function pillRow(n: number, centerX: number, y: number, maxWidth: number): Slot[] {
-  const spacing = Math.min(35, maxWidth / Math.max(n, 1));
-  const r = Math.min(12, spacing * 0.4);
+  const spacing = Math.min(42, maxWidth / Math.max(n, 1));
+  const r = Math.min(PILL_R, spacing * 0.4);
   return Array.from({ length: n }, (_, i) => ({ x: centerX + (i - (n - 1) / 2) * spacing, y, r, labelBelow: false }));
 }

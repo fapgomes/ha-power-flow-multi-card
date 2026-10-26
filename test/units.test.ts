@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { formatCompact, formatPower, toWatts } from '../src/units';
+import { formatPower, toWatts } from '../src/units';
 
 describe('toWatts', () => {
   it('normalises units', () => {
@@ -23,10 +23,6 @@ describe('format', () => {
     expect(formatPower(999.6)).toBe('1.0 kW');
     expect(formatPower(2504)).toBe('2.5 kW');
     expect(formatPower(-320)).toBe('320 W');
-  });
-  it('formatCompact', () => {
-    expect(formatCompact(1200)).toBe('1.2k');
-    expect(formatCompact(80)).toBe('80');
   });
 });
 

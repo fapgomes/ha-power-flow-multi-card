@@ -2,7 +2,7 @@ import { html, LitElement, nothing, svg, type PropertyValues, type SVGTemplateRe
 import { property, state } from 'lit/decorators.js';
 import { computeFlows, totalsFromReadings, type Flows } from './flows';
 import {
-  BANK_PILLS_Y, consumerPath, consumerRoute, consumerSlots, modeFor, NODES, pillRow, PILLS_MAX_WIDTH, placeSatellite,
+  BANK_PILLS_Y, consumerPath, consumerRoute, consumerSlots, modeFor, NODES, pillRow, PILL_R, PILLS_MAX_WIDTH, placeSatellite,
   SOLAR_PILLS_Y, viewBox, type Circle, type Obstacles, type Pt, type Rect, type Slot,
 } from './layout';
 import './editor';
@@ -10,10 +10,12 @@ import { ConsumerRanker } from './ranking';
 import { normalizeConfig, readState } from './readings';
 import { COLORS, styles } from './styles';
 import type { CardConfig, HassLike, Readings } from './types';
-import { dotDuration, formatCompact, formatPower, truncate } from './units';
+import { dotDuration, formatPower, truncate } from './units';
+
+/** Below this total (W) solar counts as idle and its source pills are hidden. */
+const IDLE_SOLAR_W = 10;
 
 const DASH = '—';
-const CHILD_R = 12;
 
 /** "Solar" and "Battery" names, tucked against the circle's upper-right / lower-right edge. */
 const SOLAR_LABEL = { x: NODES.solar.x + 27, y: NODES.solar.y - 22 };
@@ -194,7 +196,7 @@ export class PowerFlowMultiCard extends LitElement {
     r: Readings, cfg: CardConfig, visible: Readings['consumers'], slots: Slot[], vb: { width: number; height: number },
     shown: { solarPills: Circle[]; bankPills: Circle[]; hasSolar: boolean; hasBattery: boolean; hasLowCarbon: boolean },
     paths: SVGTemplateResult[], nodes: SVGTemplateResult[],
-    fmt: (w: number | null) => string, fmtPill: (w: number | null) => string,
+    fmt: (w: number | null) => string,
   ): void {
     const devices = new Map((cfg.consumers?.devices ?? []).map((d) => [d.entity, d]));
     const globalMin = cfg.consumers?.min_power ?? 0;
@@ -216,7 +218,7 @@ export class PowerFlowMultiCard extends LitElement {
     visible.forEach((parent, i) => {
       const p = slots[i];
       on.filter((c) => c.parent === parent.entity).forEach((c, j) => {
-        const s = placeSatellite(p, CHILD_R, obstacles, vb, home);
+        const s = placeSatellite(p, PILL_R, obstacles, vb, home);
         obstacles.circles.push(s);
         const d = Math.hypot(s.x - p.x, s.y - p.y);
         const ux = (s.x - p.x) / d;
@@ -225,8 +227,8 @@ export class PowerFlowMultiCard extends LitElement {
         obstacles.segments.push({ x0: p.x, y0: p.y, x1: s.x, y1: s.y });
         paths.push(this.flow(`child-${i}-${j}`, `M${r1(p.x + ux * p.r)},${r1(p.y + uy * p.r)} L${r1(s.x - ux * s.r)},${r1(s.y - uy * s.r)}`,
           c.color, c.w ?? 0, { kind: 'child', r: 2 }));
-        nodes.push(this.node('child', c.entity, s, c.color, [{ text: fmtPill(c.w) }],
-          { title: `${c.name}: ${fmt(c.w)}`, fontSize: Math.min(7.5, s.r * 0.62), strokeWidth: 1.5 }));
+        nodes.push(this.node('child', c.entity, s, c.color, [{ text: fmt(c.w) }],
+          { title: `${c.name}: ${fmt(c.w)}`, fontSize: Math.min(8, s.r * 0.62), strokeWidth: 1.5 }));
       });
     });
   }
@@ -249,10 +251,10 @@ export class PowerFlowMultiCard extends LitElement {
     const vb = viewBox(columns, mode);
 
     const { grid, solar, battery, home, lowCarbon } = NODES;
-    const solarPills = pillRow(r.solarSources.length, solar.x, SOLAR_PILLS_Y, PILLS_MAX_WIDTH);
+    const solarActive = cfg.solar?.show_idle_sources || (r.solarTotal ?? 0) >= IDLE_SOLAR_W;
+    const solarPills = solarActive ? pillRow(r.solarSources.length, solar.x, SOLAR_PILLS_Y, PILLS_MAX_WIDTH) : [];
     const bankPills = pillRow(r.banks.length, battery.x, BANK_PILLS_Y, PILLS_MAX_WIDTH);
     const fmt = (w: number | null) => (w === null ? DASH : formatPower(w));
-    const fmtPill = (w: number | null) => (w === null ? DASH : formatCompact(w));
     const homeW = r.homeEntityW ?? f.home;
 
     const paths: SVGTemplateResult[] = [];
@@ -304,8 +306,8 @@ export class PowerFlowMultiCard extends LitElement {
         [{ text: fmt(r.solarTotal) }], { title: 'Solar', icon: 'mdi:solar-power', fontSize: 11, strokeWidth: 2.5 }));
       solarPills.forEach((p, i) => {
         const s = r.solarSources[i];
-        nodes.push(this.node('solar-source', s.entity, p, COLORS.solar, [{ text: fmtPill(s.w) }],
-          { title: `${s.name}: ${fmt(s.w)}`, fontSize: Math.min(7.5, p.r * 0.62), strokeWidth: 1.5 }));
+        nodes.push(this.node('solar-source', s.entity, p, COLORS.solar, [{ text: fmt(s.w ?? 0) }],
+          { title: `${s.name}: ${fmt(s.w)}`, fontSize: Math.min(8, p.r * 0.62), strokeWidth: 1.5 }));
       });
     }
     if (hasBattery) {
@@ -322,7 +324,7 @@ export class PowerFlowMultiCard extends LitElement {
         const b = r.banks[i];
         nodes.push(this.node('bank', b.entity, p, COLORS.batteryDischarge,
           [{ text: b.soc === null ? DASH : `${Math.round(b.soc)}%` }],
-          { title: `${b.name}: ${b.soc === null ? DASH : `${Math.round(b.soc)}%`} · ${fmt(b.w)}`, fontSize: Math.min(7.5, p.r * 0.62), strokeWidth: 1.5 }));
+          { title: `${b.name}: ${b.soc === null ? DASH : `${Math.round(b.soc)}%`} · ${fmt(b.w)}`, fontSize: Math.min(10, p.r * 0.62), strokeWidth: 1.5 }));
       });
     }
     visible.forEach((c, i) => {
@@ -336,7 +338,7 @@ export class PowerFlowMultiCard extends LitElement {
     });
 
     const homeLayout = PowerFlowMultiCard.iconLayout(home, 11, 0, 1);
-    this.childPills(r, cfg, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon }, paths, nodes, fmt, fmtPill);
+    this.childPills(r, cfg, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon }, paths, nodes, fmt);
 
     return html`<ha-card>
       <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg">

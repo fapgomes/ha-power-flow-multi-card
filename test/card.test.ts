@@ -46,6 +46,7 @@ describe('power-flow-multi-card', () => {
   it('renders sources, banks and top consumers in grid mode at normal size', async () => {
     const el = await mount(full, fullStates);
     expect(q(el, '[data-node="solar-source"]')).toHaveLength(3);
+    expect(q(el, '[data-node="solar-source"] text.value').every((t) => /^\d+(\.\d)? k?W$/.test(t.textContent!.trim()))).toBe(true);
     expect(q(el, '[data-node="bank"]')).toHaveLength(2);
     const consumers = q(el, '[data-node="consumer"]');
     expect(consumers).toHaveLength(6);
@@ -68,6 +69,17 @@ describe('power-flow-multi-card', () => {
     expect(titles).toHaveLength(6);
   });
 
+  it('hides the solar sources when solar is idle, unless show_idle_sources is set', async () => {
+    const night = { ...fullStates, 'sensor.s1': '0', 'sensor.s2': 'unavailable', 'sensor.s3': '1' };
+    let el = await mount(full, night);
+    expect(q(el, '[data-node="solar-source"]')).toHaveLength(0);
+    expect(q(el, '[data-flow="solar-source"]')).toHaveLength(0);
+    expect(q(el, '[data-node="solar"]')).toHaveLength(1);
+    document.body.innerHTML = '';
+    el = await mount({ ...full, solar: { ...full.solar!, show_idle_sources: true } }, night);
+    expect(q(el, '[data-node="solar-source"] text.value').map((t) => t.textContent!.trim())).toEqual(['0 W', '0 W', '1 W']);
+  });
+
   it('shows a child consumer as a pill on its parent, outside the ranking', async () => {
     const cfg = structuredClone(full);
     cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
@@ -77,6 +89,8 @@ describe('power-flow-multi-card', () => {
     const child = q(el, '[data-node="child"]');
     expect(child).toHaveLength(1);
     expect(child[0].querySelector('title')!.textContent).toBe('pc: 80 W');
+    expect(child[0].querySelector('circle')!.getAttribute('r')).toBe('16');
+    expect(child[0].querySelector('text.value')!.textContent!.trim()).toBe('80 W');
     expect(q(el, '[data-flow="child"]')).toHaveLength(1);
     expect(q(el, '[data-dot="child-0-0"]')).toHaveLength(1);
   });

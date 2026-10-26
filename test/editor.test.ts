@@ -107,6 +107,14 @@ describe('editor', () => {
     expect(c).toEqual({ columns: 3, min_power: 0, devices: base.consumers!.devices });
   });
 
+  it('keeps show_idle_sources only when enabled', async () => {
+    const { el, changes } = await mount(base);
+    change(el, 'solar', { entity: 'sensor.pv', show_idle_sources: true });
+    expect(last(changes).solar).toEqual({ ...base.solar, show_idle_sources: true });
+    change(el, 'solar', { entity: 'sensor.pv', show_idle_sources: false });
+    expect(last(changes).solar).toEqual(base.solar);
+  });
+
   it('removes the solar section when the total and every source are gone', async () => {
     const { el, changes } = await mount({ ...base, solar: { sources: [{ entity: 'sensor.s1' }] } });
     click(el, '[data-list="sources"][data-index="0"][data-action="remove"]');

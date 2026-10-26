@@ -18,7 +18,7 @@ export interface CardConfig {
   type: string;
   grid: { entity: PowerEntity; invert?: boolean };
   low_carbon?: { entity: string };
-  solar?: { entity?: string; sources: SolarSourceConfig[] };
+  solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean };
   battery?: { banks: BankConfig[] };
   home?: { entity?: string };
   consumers?: ConsumersConfig;

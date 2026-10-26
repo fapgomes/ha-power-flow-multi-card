@@ -31,7 +31,8 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
-    h_solar: 'Sum of the sources when empty', h_min_power: 'Consumers below this are hidden',
+    h_solar: 'Sum of the sources when empty', show_idle: 'Show sources when solar is idle',
+    h_idle: 'By default the source pills are hidden while solar is below 10 W', h_min_power: 'Consumers below this are hidden',
     h_sort: 'A consumer only overtakes another after beating it by this margin for this long',
     h_device_min: 'Overrides the global minimum power when set',
     parent: 'Parent', h_parent: 'Shown as a small pill on the parent, whose value already includes this one',
@@ -47,7 +48,8 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
-    h_solar: 'Se vazio, é a soma das fontes', h_min_power: 'Os consumos abaixo disto não aparecem',
+    h_solar: 'Se vazio, é a soma das fontes', show_idle: 'Mostrar fontes com o solar parado',
+    h_idle: 'Por omissão, as fontes ficam escondidas enquanto o solar está abaixo de 10 W', h_min_power: 'Os consumos abaixo disto não aparecem',
     h_sort: 'Um consumo só ultrapassa outro se o superar por esta margem durante este tempo',
     h_device_min: 'Se preenchida, substitui a potência mínima global',
     parent: 'Mãe', h_parent: 'Aparece como pastilha na mãe, cujo valor já inclui este',
@@ -145,8 +147,12 @@ export class PowerFlowMultiCardEditor extends LitElement {
     const devices = consumers.devices ?? [];
     const { devices: _d, ...settings } = consumers;
 
-    const setSolar = (entity: string | undefined, list: SolarSourceConfig[]) =>
-      this.emit(withSection(cfg, 'solar', entity || list.length ? { ...compact({ entity }), sources: list } : undefined));
+    const setSolar = (patch: { entity?: string; sources?: SolarSourceConfig[]; show_idle_sources?: boolean }) => {
+      const next = { entity: solar.entity, sources, show_idle_sources: solar.show_idle_sources, ...patch };
+      const list = next.sources ?? [];
+      this.emit(withSection(cfg, 'solar', next.entity || list.length
+        ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), sources: list } : undefined));
+    };
     const setBanks = (list: BankConfig[]) => this.emit(withSection(cfg, 'battery', list.length ? { banks: list } : undefined));
     const setConsumers = (s: Data, list: DeviceConfig[]) => {
       const kept = compact(s);
@@ -196,12 +202,13 @@ export class PowerFlowMultiCardEditor extends LitElement {
           (v) => this.emit(withSection(cfg, 'low_carbon', v.entity ? { entity: v.entity } : undefined)), { entity: 'fossil' })}`)}
 
       ${this.panel('solar', 'mdi:solar-power', html`
-        ${this.form('solar', compact({ entity: solar.entity }), [{ name: 'entity', selector: sensor, helper: 'h_solar' }],
-          (v) => setSolar(v.entity, sources), { entity: 'solar_total' })}
+        ${this.form('solar', compact({ entity: solar.entity, show_idle_sources: solar.show_idle_sources }),
+          [{ name: 'entity', selector: sensor, helper: 'h_solar' }, { name: 'show_idle_sources', selector: { boolean: {} }, helper: 'h_idle' }],
+          (v) => setSolar({ entity: v.entity, show_idle_sources: v.show_idle_sources }), { entity: 'solar_total', show_idle_sources: 'show_idle' })}
         ${this.list<SolarSourceConfig>('sources', sources, (s) => this.name(s.entity, s.name),
           (s, i) => this.form(`source-${i}`, compact({ entity: s.entity, name: s.name, icon: s.icon }), deviceSchema.slice(0, 3),
-            (v) => setSolar(solar.entity, replaceItem(sources, i, { entity: v.entity ?? '', ...compact({ name: v.name, icon: v.icon }) }))),
-          (list) => setSolar(solar.entity, list), () => ({ entity: '' }))}`)}
+            (v) => setSolar({ sources: replaceItem(sources, i, { entity: v.entity ?? '', ...compact({ name: v.name, icon: v.icon }) }) })),
+          (list) => setSolar({ sources: list }), () => ({ entity: '' }))}`)}
 
       ${this.panel('battery', 'mdi:battery-high', this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
         (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },

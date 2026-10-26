@@ -17,11 +17,6 @@ export function formatPower(w: number): string {
   return abs < 1000 ? `${abs} W` : `${(abs / 1000).toFixed(1)} kW`;
 }
 
-export function formatCompact(w: number): string {
-  const abs = Math.round(Math.abs(w));
-  return abs < 1000 ? `${abs}` : `${(abs / 1000).toFixed(1)}k`;
-}
-
 export function truncate(text: string, max: number): string {
   return text.length > max ? `${text.slice(0, max - 1)}…` : text;
 }
