@@ -11,6 +11,10 @@ export interface ConsumersConfig {
   min_power?: number;
   sort_margin?: number;
   sort_hold?: number;
+  /** Name inside full-size circles (default true). */
+  name_inside?: boolean;
+  /** Child share as a percentage on each child pill (default true). */
+  show_percent?: boolean;
   devices: DeviceConfig[];
 }
 
@@ -18,8 +22,8 @@ export interface CardConfig {
   type: string;
   grid: { entity: PowerEntity; invert?: boolean };
   low_carbon?: { entity: string };
-  solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean };
-  battery?: { banks: BankConfig[] };
+  solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean };
+  battery?: { banks: BankConfig[]; name_inside?: boolean };
   home?: { entity?: string };
   consumers?: ConsumersConfig;
 }

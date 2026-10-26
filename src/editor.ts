@@ -1,7 +1,7 @@
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import {
-  bankFromForm, bankToForm, compact, deviceFromForm, deviceToForm, gridFromForm, gridToForm, moveItem, removeItem,
+  bankFromForm, bankToForm, compact, deviceFromForm, deviceToForm, gridFromForm, gridToForm, moveItem, offOnly, removeItem,
   replaceItem, withSection, type BankForm, type DeviceForm, type GridForm,
 } from './editor-config';
 import type { BankConfig, CardConfig, DeviceConfig, HassLike, SolarSourceConfig } from './types';
@@ -31,6 +31,9 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
+    name_inside: 'Names inside the circles', name_inside_one: 'Name inside the circle', show_percent: 'Children share (%)',
+    h_name_inside: 'Only on full-size circles; otherwise the name goes outside',
+    h_percent: 'Shown on each child pill; the inner ring on the parent is always shown',
     h_solar: 'Sum of the sources when empty', show_idle: 'Show sources when solar is idle',
     h_idle: 'By default the source pills are hidden while solar is below 10 W', h_min_power: 'Consumers below this are hidden',
     h_sort: 'A consumer only overtakes another after beating it by this margin for this long',
@@ -48,6 +51,9 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
+    name_inside: 'Nomes dentro dos círculos', name_inside_one: 'Nome dentro do círculo', show_percent: 'Percentagem das filhas',
+    h_name_inside: 'Só nos círculos de tamanho normal; caso contrário, o nome fica por fora',
+    h_percent: 'Aparece em cada pastilha filha; o anel interior na mãe aparece sempre',
     h_solar: 'Se vazio, é a soma das fontes', show_idle: 'Mostrar fontes com o solar parado',
     h_idle: 'Por omissão, as fontes ficam escondidas enquanto o solar está abaixo de 10 W', h_min_power: 'Os consumos abaixo disto não aparecem',
     h_sort: 'Um consumo só ultrapassa outro se o superar por esta margem durante este tempo',
@@ -147,15 +153,21 @@ export class PowerFlowMultiCardEditor extends LitElement {
     const devices = consumers.devices ?? [];
     const { devices: _d, ...settings } = consumers;
 
-    const setSolar = (patch: { entity?: string; sources?: SolarSourceConfig[]; show_idle_sources?: boolean }) => {
-      const next = { entity: solar.entity, sources, show_idle_sources: solar.show_idle_sources, ...patch };
+    const setSolar = (patch: { entity?: string; sources?: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean }) => {
+      const next = { entity: solar.entity, sources, show_idle_sources: solar.show_idle_sources, name_inside: solar.name_inside, ...patch };
       const list = next.sources ?? [];
       this.emit(withSection(cfg, 'solar', next.entity || list.length
-        ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), sources: list } : undefined));
+        ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), ...offOnly({ name_inside: next.name_inside }), sources: list }
+        : undefined));
     };
-    const setBanks = (list: BankConfig[]) => this.emit(withSection(cfg, 'battery', list.length ? { banks: list } : undefined));
+    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean }) => {
+      const next = { banks, name_inside: cfg.battery?.name_inside, ...patch };
+      this.emit(withSection(cfg, 'battery', next.banks.length ? { banks: next.banks, ...offOnly({ name_inside: next.name_inside }) } : undefined));
+    };
+    const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
     const setConsumers = (s: Data, list: DeviceConfig[]) => {
-      const kept = compact(s);
+      const { name_inside, show_percent, ...rest } = s;
+      const kept = { ...compact(rest), ...offOnly({ name_inside, show_percent }) };
       this.emit(withSection(cfg, 'consumers', list.length || Object.keys(kept).length ? { ...kept, devices: list } : undefined));
     };
 
@@ -193,7 +205,10 @@ export class PowerFlowMultiCardEditor extends LitElement {
       { name: 'min_power', selector: number(0, undefined, 'W'), helper: 'h_min_power' },
       { name: 'sort_margin', selector: number(0, 100, '%'), helper: 'h_sort' },
       { name: 'sort_hold', selector: number(0, 600, 's') },
+      { name: 'name_inside', selector: { boolean: {} }, helper: 'h_name_inside' },
+      { name: 'show_percent', selector: { boolean: {} }, helper: 'h_percent' },
     ];
+    const nameInside = { name: 'name_inside', selector: { boolean: {} } };
 
     return html`
       ${this.panel('grid', 'mdi:transmission-tower', html`
@@ -202,23 +217,28 @@ export class PowerFlowMultiCardEditor extends LitElement {
           (v) => this.emit(withSection(cfg, 'low_carbon', v.entity ? { entity: v.entity } : undefined)), { entity: 'fossil' })}`)}
 
       ${this.panel('solar', 'mdi:solar-power', html`
-        ${this.form('solar', compact({ entity: solar.entity, show_idle_sources: solar.show_idle_sources }),
-          [{ name: 'entity', selector: sensor, helper: 'h_solar' }, { name: 'show_idle_sources', selector: { boolean: {} }, helper: 'h_idle' }],
-          (v) => setSolar({ entity: v.entity, show_idle_sources: v.show_idle_sources }), { entity: 'solar_total', show_idle_sources: 'show_idle' })}
+        ${this.form('solar', { ...compact({ entity: solar.entity, show_idle_sources: solar.show_idle_sources }), name_inside: solar.name_inside !== false },
+          [{ name: 'entity', selector: sensor, helper: 'h_solar' }, { name: 'show_idle_sources', selector: { boolean: {} }, helper: 'h_idle' }, nameInside],
+          (v) => setSolar({ entity: v.entity, show_idle_sources: v.show_idle_sources, name_inside: v.name_inside }),
+          { entity: 'solar_total', show_idle_sources: 'show_idle', name_inside: 'name_inside_one' })}
         ${this.list<SolarSourceConfig>('sources', sources, (s) => this.name(s.entity, s.name),
           (s, i) => this.form(`source-${i}`, compact({ entity: s.entity, name: s.name, icon: s.icon }), deviceSchema.slice(0, 3),
             (v) => setSolar({ sources: replaceItem(sources, i, { entity: v.entity ?? '', ...compact({ name: v.name, icon: v.icon }) }) })),
           (list) => setSolar({ sources: list }), () => ({ entity: '' }))}`)}
 
-      ${this.panel('battery', 'mdi:battery-high', this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
+      ${this.panel('battery', 'mdi:battery-high', html`
+        ${this.form('battery', { name_inside: cfg.battery?.name_inside !== false }, [nameInside],
+          (v) => setBattery({ name_inside: v.name_inside }), { name_inside: 'name_inside_one' })}
+        ${this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
         (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
-        setBanks, () => ({ power: '', soc: '' })))}
+        setBanks, () => ({ power: '', soc: '' }))}`)}
 
       ${this.panel('home', 'mdi:home', this.form('home', compact({ entity: cfg.home?.entity }), [{ name: 'entity', selector: sensor, helper: 'h_home' }],
         (v) => this.emit(withSection(cfg, 'home', v.entity ? { entity: v.entity } : undefined)), { entity: 'home_entity' }))}
 
       ${this.panel('consumers', 'mdi:power-plug', html`
-        ${this.form('consumers', settings, consumerSchema, (v) => setConsumers(v, devices))}
+        ${this.form('consumers', { ...settings, name_inside: consumers.name_inside !== false, show_percent: consumers.show_percent !== false },
+          consumerSchema, (v) => setConsumers(v, devices))}
         ${this.list<DeviceConfig>('devices', devices, (d) => this.name(d.entity, d.name),
           (d, i) => this.form(`device-${i}`, deviceToForm(d), withParent(d),
             (v) => setConsumers(settings, replaceItem(devices, i, deviceFromForm(v as DeviceForm)))),

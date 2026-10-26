@@ -80,6 +80,39 @@ describe('power-flow-multi-card', () => {
     expect(q(el, '[data-node="solar-source"] text.value').map((t) => t.textContent!.trim())).toEqual(['0 W', '0 W', '1 W']);
   });
 
+  it('puts names inside the circles by default', async () => {
+    const el = await mount(full, fullStates);
+    const values = (sel: string) => q(el, `${sel} text.value`).map((t) => t.textContent!.trim());
+    expect(q(el, '[data-node="consumer"] text.label')).toHaveLength(0);
+    expect(values('[data-node="consumer"]')).toContain('ac');
+    expect(values('[data-node="solar"]')).toContain('Solar');
+    expect(values('[data-node="battery"]')).toContain('Battery');
+    expect(q(el, 'text.label').map((t) => t.textContent)).not.toContain('Solar');
+    expect(q(el, 'text.label').map((t) => t.textContent)).not.toContain('Battery');
+  });
+
+  it('puts names outside when name_inside is false', async () => {
+    const cfg = { ...full, solar: { ...full.solar!, name_inside: false }, battery: { ...full.battery!, name_inside: false },
+      consumers: { ...full.consumers!, name_inside: false } };
+    const el = await mount(cfg, fullStates);
+    expect(q(el, '[data-node="consumer"] text.label').map((t) => t.textContent)).toContain('ac');
+    expect(q(el, '[data-node="solar"] text.value').map((t) => t.textContent!.trim())).not.toContain('Solar');
+    expect(q(el, 'text.label').map((t) => t.textContent)).toEqual(expect.arrayContaining(['Solar', 'Battery']));
+  });
+
+  it('shows each child share as a ring arc on the parent and a percentage on the pill', async () => {
+    const cfg = structuredClone(full);
+    cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
+    let el = await mount(cfg, fullStates);
+    expect(q(el, '[data-ring="child"]')).toHaveLength(1);
+    expect(q(el, '[data-node="child"] text.value').map((t) => t.textContent!.trim())).toEqual(['80 W', '9%']);
+    document.body.innerHTML = '';
+    cfg.consumers!.show_percent = false;
+    el = await mount(cfg, fullStates);
+    expect(q(el, '[data-ring="child"]')).toHaveLength(1);
+    expect(q(el, '[data-node="child"] text.value').map((t) => t.textContent!.trim())).toEqual(['80 W']);
+  });
+
   it('shows a child consumer as a pill on its parent, outside the ranking', async () => {
     const cfg = structuredClone(full);
     cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
@@ -113,8 +146,8 @@ describe('power-flow-multi-card', () => {
     expect(Math.abs((cy - iconTop) - (baseline - cy))).toBeLessThanOrEqual(1);
   });
 
-  it('keeps the Solar and Battery names close to their circles', async () => {
-    const el = await mount(full, fullStates);
+  it('keeps the Solar and Battery names close to their circles when they go outside', async () => {
+    const el = await mount({ ...full, solar: { ...full.solar!, name_inside: false }, battery: { ...full.battery!, name_inside: false } }, fullStates);
     for (const [name, c] of [['Solar', { x: 170, y: 95 }], ['Battery', { x: 170, y: 325 }]] as const) {
       const t = q(el, 'text.label').find((x) => x.textContent === name)!;
       const d = Math.hypot(Number(t.getAttribute('x')) - c.x, Number(t.getAttribute('y')) - c.y);
@@ -129,7 +162,9 @@ describe('power-flow-multi-card', () => {
     expect(icon.icon).toBe('mdi:battery-60');
     const fo = b.querySelector('foreignObject')!;
     const texts = Array.from(b.querySelectorAll('text.value'));
-    expect(texts.map((t) => t.getAttribute('font-size'))).toEqual(['10', '10', '10']);
+    expect(texts.map((t) => t.getAttribute('font-size'))).toEqual(['10', '10', '10', '7']);
+    expect(texts[3].textContent!.trim()).toBe('Battery');
+    expect(Number(texts[3].getAttribute('y'))).toBeLessThan(325 + 32 - 4);
     const iconTop = Number(fo.getAttribute('y'));
     const iconBottom = iconTop + Number(fo.getAttribute('height'));
     expect(Number(texts[0].getAttribute('y'))).toBeLessThan(iconTop);
@@ -181,7 +216,7 @@ describe('power-flow-multi-card', () => {
 
 describe('review fixes (card)', () => {
   it('hides unavailable consumers and truncates long names', async () => {
-    const cfg: CardConfig = { ...full, consumers: { ...full.consumers!, devices: [
+    const cfg: CardConfig = { ...full, consumers: { ...full.consumers!, name_inside: false, devices: [
       { entity: 'sensor.ac', name: 'Ar Condicionado da Sala' }, { entity: 'sensor.forno', name: 'Forno' }, { entity: 'sensor.dead', name: 'Dead' }] } };
     const el = await mount(cfg, { ...fullStates, 'sensor.dead': 'unavailable' });
     const consumers = q(el, '[data-node="consumer"]');

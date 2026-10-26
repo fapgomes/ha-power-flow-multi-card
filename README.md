@@ -89,7 +89,9 @@ consumers:
 | `low_carbon.entity` | — | Grid fossil fuel percentage; low-carbon = import × (1 − %) |
 | `solar.entity` | sum of the sources | Total solar production |
 | `solar.sources[]` | — | `entity`, `name`, `icon` per source |
+| `solar.name_inside` | `true` | Writes "Solar" inside the circle; `false` puts it outside |
 | `solar.show_idle_sources` | `false` | Keeps the source pills visible while solar is idle (total below 10 W); by default they are hidden |
+| `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
 | `consumers.columns` | `2` | Grid columns to the right of home |
@@ -97,6 +99,8 @@ consumers:
 | `consumers.min_power` | `0` | Consumers below this (W) are hidden |
 | `consumers.sort_margin` | `10` | % by which a consumer must beat another to swap places |
 | `consumers.sort_hold` | `30` | Seconds that difference must last before swapping |
+| `consumers.name_inside` | `true` | Names inside full-size consumer circles; `false` puts them outside. Shrunken circles always have the name outside |
+| `consumers.show_percent` | `true` | Shows each child's share of its parent (%) on the child pill |
 | `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, overrides the global one for this device), `parent` (entity of another device; see below) |
 
 ### Consumer layout
@@ -116,7 +120,9 @@ circuit). The parent's value already includes the child's, so the child:
 - stays out of the ranking and takes no slot in the grid;
 - is drawn as a small pill attached to the parent, with a line and moving dots, when the parent is
   visible and the child is above its minimum power;
-- sits at the first free spot around the parent, starting on the side facing away from home.
+- sits at the first free spot around the parent, starting on the side facing away from home;
+- shows its share of the parent as an arc of an inner ring on the parent, in the child's colour, and
+  (unless `show_percent: false`) as a percentage on the pill.
 
 There is only one level: a parent cannot be a child of another device.
 

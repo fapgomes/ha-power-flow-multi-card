@@ -39,6 +39,11 @@ export function compact<T extends Record<string, unknown>>(o: T): Partial<T> {
   ) as Partial<T>;
 }
 
+/** Options that default to on: only an explicit `false` is kept in the YAML. */
+export function offOnly<T extends Record<string, unknown>>(o: T): Partial<T> {
+  return Object.fromEntries(Object.entries(o).filter(([, v]) => v === false)) as Partial<T>;
+}
+
 export type PowerMode = 'single' | 'split';
 
 export interface GridForm { mode: PowerMode; entity?: string; consumption?: string; production?: string; invert?: boolean }

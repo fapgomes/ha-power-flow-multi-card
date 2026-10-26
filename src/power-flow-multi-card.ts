@@ -45,7 +45,11 @@ function segments(route: Pt[]): Obstacles['segments'] {
 
 let instanceCounter = 0;
 
-interface Line { text: string; color?: string }
+interface Line { text: string; color?: string; size?: number }
+
+const NAME_COLOR = 'var(--secondary-text-color)';
+/** A name written inside its circle, under the value. */
+const nameLine = (text: string, size = 8): Line => ({ text, size, color: NAME_COLOR });
 
 export class PowerFlowMultiCard extends LitElement {
   static styles = styles;
@@ -117,20 +121,20 @@ export class PowerFlowMultiCard extends LitElement {
   }
 
   /**
-   * An icon with `above` text lines over it and `below` lines under it (size fs), the whole group
-   * centred vertically in the circle.
+   * An icon with text lines over and under it (one font size per line), the whole group centred
+   * vertically in the circle.
    */
-  private static iconLayout(c: Circle, fs: number, above: number, below: number, scale = 0.55): { iconY: number; size: number; baselines: number[] } {
+  private static iconLayout(c: Circle, above: number[], below: number[], scale = 0.55): { iconY: number; size: number; baselines: number[] } {
     const size = c.r * scale;
     const gap = c.r * 0.08;
-    const cap = fs * 0.72;
-    const lh = fs * 1.25;
-    const block = (n: number) => (n ? cap + (n - 1) * lh + gap : 0);
+    // Offsets of each baseline from the top of its block: cap height for the first, line height after.
+    const offsets = (sizes: number[]) => sizes.reduce<number[]>((acc, fs, i) => [...acc, i ? acc[i - 1] + fs * 1.25 : fs * 0.72], []);
+    const block = (sizes: number[]) => (sizes.length ? offsets(sizes)[sizes.length - 1] + gap : 0);
     const top = c.y - (block(above) + size + block(below)) / 2;
     const iconY = top + block(above);
     const baselines = [
-      ...Array.from({ length: above }, (_, i) => top + cap + i * lh),
-      ...Array.from({ length: below }, (_, i) => iconY + size + gap + cap + i * lh),
+      ...offsets(above).map((o) => top + o),
+      ...offsets(below).map((o) => iconY + size + gap + o),
     ];
     return { iconY, size, baselines };
   }
@@ -154,7 +158,8 @@ export class PowerFlowMultiCard extends LitElement {
     const withIcon = !!opts.icon;
     const lh = fs * 1.25;
     const above = Math.min(opts.linesAboveIcon ?? 0, lines.length);
-    const layout = withIcon ? PowerFlowMultiCard.iconLayout(c, fs, above, lines.length - above, opts.iconScale) : undefined;
+    const sizes = lines.map((l) => l.size ?? fs);
+    const layout = withIcon ? PowerFlowMultiCard.iconLayout(c, sizes.slice(0, above), sizes.slice(above), opts.iconScale) : undefined;
     const lineY = (i: number) => (layout ? layout.baselines[i] : c.y - ((lines.length - 1) * lh) / 2 + fs * 0.35 + i * lh);
     const labelY = opts.labelBelow ? c.y + c.r + 12 : c.y - c.r - 6;
     if (opts.label) {
@@ -166,7 +171,7 @@ export class PowerFlowMultiCard extends LitElement {
       <title>${opts.title ?? opts.label ?? entity ?? kind}</title>
       <circle class="bg" cx=${c.x} cy=${c.y} r=${c.r} stroke=${color} stroke-width=${opts.strokeWidth ?? 2}></circle>
       ${layout ? this.icon(c, opts.icon!, opts.iconColor ?? color, layout) : nothing}
-      ${lines.map((l, i) => svg`<text class="value" x=${c.x} y=${lineY(i)} font-size=${fs}
+      ${lines.map((l, i) => svg`<text class="value" x=${c.x} y=${lineY(i)} font-size=${l.size ?? fs}
           style=${l.color ? `fill:${l.color}` : ''}>${l.text}</text>`)}
       ${opts.label ? svg`<text class="label" x=${c.x} y=${labelY} style=${opts.labelSize ? `font-size:${opts.labelSize}px` : ''}>${opts.label}</text>` : nothing}
     </g>`;
@@ -191,27 +196,48 @@ export class PowerFlowMultiCard extends LitElement {
       })}`;
   }
 
+  /** Child consumers that are on: above zero and above their own (or the global) minimum power. */
+  private static activeChildren(r: Readings, cfg: CardConfig): Readings['consumers'] {
+    const devices = new Map((cfg.consumers?.devices ?? []).map((d) => [d.entity, d]));
+    const globalMin = cfg.consumers?.min_power ?? 0;
+    return r.consumers.filter((c) => c.parent && c.w !== null && c.w > 0
+      && c.w >= (devices.get(c.entity)?.min_power ?? globalMin));
+  }
+
+  /** Inner ring on a parent with one arc per child, each as long as the child's share of the parent. */
+  private shareRing(c: Circle, total: number, kids: Readings['consumers']): SVGTemplateResult {
+    const rr = c.r - 5;
+    const circ = 2 * Math.PI * rr;
+    let offset = 0;
+    return svg`<g data-ring="child" pointer-events="none">
+      <circle class="ring-bg" cx=${c.x} cy=${c.y} r=${rr} stroke-width="3"></circle>
+      ${kids.map((k) => {
+        const len = Math.min(Math.max((k.w ?? 0) / total, 0), 1) * (circ - offset);
+        const seg = svg`<circle cx=${c.x} cy=${c.y} r=${rr} fill="none" stroke=${k.color} stroke-width="3"
+          stroke-dasharray="0 ${offset} ${len} ${circ}" transform="rotate(-90 ${c.x} ${c.y})"></circle>`;
+        offset += len;
+        return seg;
+      })}
+    </g>`;
+  }
+
   /** Child consumers as small pills on their visible parent, placed clear of everything already drawn. */
   private childPills(
-    r: Readings, cfg: CardConfig, visible: Readings['consumers'], slots: Slot[], vb: { width: number; height: number },
-    shown: { solarPills: Circle[]; bankPills: Circle[]; hasSolar: boolean; hasBattery: boolean; hasLowCarbon: boolean },
+    r: Readings, cfg: CardConfig, on: Readings['consumers'], visible: Readings['consumers'], slots: Slot[], vb: { width: number; height: number },
+    shown: { solarPills: Circle[]; bankPills: Circle[]; hasSolar: boolean; hasBattery: boolean; hasLowCarbon: boolean; solarInside: boolean; batteryInside: boolean },
     paths: SVGTemplateResult[], nodes: SVGTemplateResult[],
     fmt: (w: number | null) => string,
   ): void {
-    const devices = new Map((cfg.consumers?.devices ?? []).map((d) => [d.entity, d]));
-    const globalMin = cfg.consumers?.min_power ?? 0;
-    const on = r.consumers.filter((c) => c.parent && c.w !== null && c.w > 0
-      && c.w >= (devices.get(c.entity)?.min_power ?? globalMin));
     if (!on.length) return;
 
     const { solar, battery, lowCarbon, grid, home } = NODES;
-    const { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon } = shown;
+    const { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarInside, batteryInside } = shown;
     const obstacles: Obstacles = {
       circles: [grid, home, ...slots, ...(hasSolar ? [solar, ...solarPills] : []), ...(hasBattery ? [battery, ...bankPills] : []),
         ...(hasLowCarbon ? [lowCarbon] : [])],
       rects: [...this.labelRects,
-        ...(hasSolar ? [{ x0: SOLAR_LABEL.x, y0: SOLAR_LABEL.y - 10, x1: SOLAR_LABEL.x + 28, y1: SOLAR_LABEL.y + 2 }] : []),
-        ...(hasBattery ? [{ x0: BATTERY_LABEL.x, y0: BATTERY_LABEL.y - 10, x1: BATTERY_LABEL.x + 38, y1: BATTERY_LABEL.y + 2 }] : [])],
+        ...(hasSolar && !solarInside ? [{ x0: SOLAR_LABEL.x, y0: SOLAR_LABEL.y - 10, x1: SOLAR_LABEL.x + 28, y1: SOLAR_LABEL.y + 2 }] : []),
+        ...(hasBattery && !batteryInside ? [{ x0: BATTERY_LABEL.x, y0: BATTERY_LABEL.y - 10, x1: BATTERY_LABEL.x + 38, y1: BATTERY_LABEL.y + 2 }] : [])],
       segments: [...FIXED_ROUTES, ...slots.map((s) => consumerRoute(s))].flatMap(segments),
     };
 
@@ -227,7 +253,9 @@ export class PowerFlowMultiCard extends LitElement {
         obstacles.segments.push({ x0: p.x, y0: p.y, x1: s.x, y1: s.y });
         paths.push(this.flow(`child-${i}-${j}`, `M${r1(p.x + ux * p.r)},${r1(p.y + uy * p.r)} L${r1(s.x - ux * s.r)},${r1(s.y - uy * s.r)}`,
           c.color, c.w ?? 0, { kind: 'child', r: 2 }));
-        nodes.push(this.node('child', c.entity, s, c.color, [{ text: fmt(c.w) }],
+        const lines: Line[] = [{ text: fmt(c.w) }];
+        if (cfg.consumers?.show_percent !== false && parent.w) lines.push(nameLine(`${Math.round(((c.w ?? 0) / parent.w) * 100)}%`, 7));
+        nodes.push(this.node('child', c.entity, s, c.color, lines,
           { title: `${c.name}: ${fmt(c.w)}`, fontSize: Math.min(8, s.r * 0.62), strokeWidth: 1.5 }));
       });
     });
@@ -241,6 +269,8 @@ export class PowerFlowMultiCard extends LitElement {
     const hasSolar = !!cfg.solar;
     const hasBattery = !!cfg.battery?.banks?.length;
     const hasLowCarbon = !!cfg.low_carbon;
+    const solarInside = cfg.solar?.name_inside !== false;
+    const batteryInside = cfg.battery?.name_inside !== false;
 
     this.labelRects = [];
     const consumersById = new Map(r.consumers.map((c) => [c.id, c]));
@@ -303,7 +333,8 @@ export class PowerFlowMultiCard extends LitElement {
     ], { label: 'Grid', labelBelow: true, icon: 'mdi:transmission-tower', fontSize: 9, strokeWidth: 2.5 }));
     if (hasSolar) {
       nodes.push(this.node('solar', cfg.solar!.entity ?? r.solarSources[0]?.entity, solar, COLORS.solar,
-        [{ text: fmt(r.solarTotal) }], { title: 'Solar', icon: 'mdi:solar-power', fontSize: 11, strokeWidth: 2.5 }));
+        solarInside ? [{ text: fmt(r.solarTotal) }, nameLine('Solar')] : [{ text: fmt(r.solarTotal) }],
+        { title: 'Solar', icon: 'mdi:solar-power', fontSize: 11, strokeWidth: 2.5, iconScale: solarInside ? 0.45 : undefined }));
       solarPills.forEach((p, i) => {
         const s = r.solarSources[i];
         nodes.push(this.node('solar-source', s.entity, p, COLORS.solar, [{ text: fmt(s.w ?? 0) }],
@@ -316,9 +347,10 @@ export class PowerFlowMultiCard extends LitElement {
         { text: r.batterySoc === null ? DASH : `${Math.round(r.batterySoc)}%` },
         { text: `↓ ${net === null ? DASH : formatPower(Math.max(net, 0))}`, color: COLORS.batteryDischarge },
         { text: `↑ ${net === null ? DASH : formatPower(Math.max(-net, 0))}`, color: COLORS.batteryCharge },
+        ...(batteryInside ? [nameLine('Battery', 7)] : []),
       ], {
         title: 'Battery', fontSize: 10, strokeWidth: 2.5, icon: batteryIcon(r.batterySoc), iconColor: 'var(--primary-text-color)',
-        iconScale: 0.42, linesAboveIcon: 1,
+        iconScale: batteryInside ? 0.34 : 0.42, linesAboveIcon: 1,
       }));
       bankPills.forEach((p, i) => {
         const b = r.banks[i];
@@ -327,23 +359,30 @@ export class PowerFlowMultiCard extends LitElement {
           { title: `${b.name}: ${b.soc === null ? DASH : `${Math.round(b.soc)}%`} · ${fmt(b.w)}`, fontSize: Math.min(10, p.r * 0.62), strokeWidth: 1.5 }));
       });
     }
+    const rings: SVGTemplateResult[] = [];
+    const children = PowerFlowMultiCard.activeChildren(r, cfg);
     visible.forEach((c, i) => {
       const s = slots[i];
       // Full-size circles get the icon; grid columns sit closer together, so their names are shorter.
       const big = s.r >= 28;
-      nodes.push(this.node('consumer', c.entity, s, c.color, [{ text: fmt(c.w) }], {
-        label: truncate(c.name, s.col === undefined ? 16 : big ? 11 : 9), labelSize: big ? undefined : 8, title: `${c.name}: ${fmt(c.w)}`, labelBelow: s.labelBelow,
+      // Only full-size circles have room for the name inside.
+      const inside = big && cfg.consumers?.name_inside !== false;
+      const kids = children.filter((k) => k.parent === c.entity);
+      if (kids.length && c.w) rings.push(this.shareRing(s, c.w, kids));
+      nodes.push(this.node('consumer', c.entity, s, c.color, inside ? [{ text: fmt(c.w) }, nameLine(truncate(c.name, 11))] : [{ text: fmt(c.w) }], {
+        label: inside ? undefined : truncate(c.name, s.col === undefined ? 16 : big ? 11 : 9), labelSize: big ? undefined : 8,
+        title: `${c.name}: ${fmt(c.w)}`, labelBelow: s.labelBelow, iconScale: inside ? 0.42 : undefined,
         icon: big ? c.icon ?? 'mdi:flash' : undefined, fontSize: big ? 10 : 8,
       }));
     });
 
-    const homeLayout = PowerFlowMultiCard.iconLayout(home, 11, 0, 1);
-    this.childPills(r, cfg, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon }, paths, nodes, fmt);
+    const homeLayout = PowerFlowMultiCard.iconLayout(home, [], [11]);
+    this.childPills(r, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarInside, batteryInside }, paths, nodes, fmt);
 
     return html`<ha-card>
       <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg">
-        ${hasSolar ? svg`<text class="label" x=${SOLAR_LABEL.x} y=${SOLAR_LABEL.y} style="text-anchor:start">Solar</text>` : nothing}
-        ${hasBattery ? svg`<text class="label" x=${BATTERY_LABEL.x} y=${BATTERY_LABEL.y} style="text-anchor:start">Battery</text>` : nothing}
+        ${hasSolar && !solarInside ? svg`<text class="label" x=${SOLAR_LABEL.x} y=${SOLAR_LABEL.y} style="text-anchor:start">Solar</text>` : nothing}
+        ${hasBattery && !batteryInside ? svg`<text class="label" x=${BATTERY_LABEL.x} y=${BATTERY_LABEL.y} style="text-anchor:start">Battery</text>` : nothing}
         ${paths}
         ${this.homeRing(f)}
         <g data-node="home" @click=${() => this.moreInfo(cfg.home?.entity)}>
@@ -353,6 +392,7 @@ export class PowerFlowMultiCard extends LitElement {
           <text class="value" x=${home.x} y=${homeLayout.baselines[0]} font-size="11">${fmt(homeW)}</text>
         </g>
         ${nodes}
+        ${rings}
       </svg>
     </ha-card>`;
   }

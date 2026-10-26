@@ -115,6 +115,20 @@ describe('editor', () => {
     expect(last(changes).solar).toEqual(base.solar);
   });
 
+  it('stores the name and percentage options only when turned off', async () => {
+    const { el, changes } = await mount(base);
+    expect(form(el, 'consumers').data).toMatchObject({ name_inside: true, show_percent: true });
+    change(el, 'consumers', { ...form(el, 'consumers').data, name_inside: false, show_percent: false });
+    expect(last(changes).consumers).toMatchObject({ name_inside: false, show_percent: false });
+    change(el, 'consumers', { ...form(el, 'consumers').data, name_inside: true, show_percent: true });
+    expect(last(changes).consumers).not.toHaveProperty('name_inside');
+    expect(last(changes).consumers).not.toHaveProperty('show_percent');
+    change(el, 'solar', { entity: 'sensor.pv', name_inside: false });
+    expect(last(changes).solar).toEqual({ ...base.solar, name_inside: false });
+    change(el, 'battery', { name_inside: false });
+    expect(last(changes).battery).toEqual({ ...base.battery, name_inside: false });
+  });
+
   it('removes the solar section when the total and every source are gone', async () => {
     const { el, changes } = await mount({ ...base, solar: { sources: [{ entity: 'sensor.s1' }] } });
     click(el, '[data-list="sources"][data-index="0"][data-action="remove"]');
