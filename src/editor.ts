@@ -31,6 +31,7 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
+    show_consumers: 'Consumers ring', h_show_consumers: 'Inner ring with each visible consumer\'s share of home; the rest stays grey',
     layout: 'Layout', horizontal: 'Horizontal (consumers to the right)', vertical: 'Vertical (consumers below, bigger circles)',
     h_layout: 'Vertical is taller and draws everything about 28 % bigger',
     h_columns: 'Horizontal layout only; the vertical one shows 3 per row',
@@ -55,6 +56,7 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
+    show_consumers: 'Anel dos consumos', h_show_consumers: 'Anel interior com a parte de cada consumo visível no total da casa; o resto fica cinzento',
     layout: 'Layout', horizontal: 'Horizontal (consumos à direita)', vertical: 'Vertical (consumos por baixo, círculos maiores)',
     h_layout: 'O vertical é mais alto e desenha tudo cerca de 28 % maior',
     h_columns: 'Só no layout horizontal; o vertical mostra 3 por linha',
@@ -260,8 +262,12 @@ export class PowerFlowMultiCardEditor extends LitElement {
         (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
         setBanks, () => ({ power: '', soc: '' }))}`)}
 
-      ${this.panel('home', 'mdi:home', this.form('home', compact({ entity: cfg.home?.entity }), [{ name: 'entity', selector: sensor, helper: 'h_home' }],
-        (v) => this.emit(withSection(cfg, 'home', v.entity ? { entity: v.entity } : undefined)), { entity: 'home_entity' }))}
+      ${this.panel('home', 'mdi:home', this.form('home', { ...compact({ entity: cfg.home?.entity }), show_consumers: cfg.home?.show_consumers !== false },
+        [{ name: 'entity', selector: sensor, helper: 'h_home' }, { name: 'show_consumers', selector: { boolean: {} }, helper: 'h_show_consumers' }],
+        (v) => {
+          const home = { ...compact({ entity: v.entity as string | undefined }), ...offOnly({ show_consumers: v.show_consumers as boolean | undefined }) };
+          this.emit(withSection(cfg, 'home', Object.keys(home).length ? home : undefined));
+        }, { entity: 'home_entity' }))}
 
       ${this.panel('consumers', 'mdi:power-plug', html`
         ${this.form('consumers', { ...settings, show_name: consumers.show_name !== false, name_inside: consumers.name_inside !== false, show_percent: consumers.show_percent !== false },

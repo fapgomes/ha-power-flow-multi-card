@@ -237,6 +237,31 @@ describe('power-flow-multi-card', () => {
     expect(await gridTexts('vertical')).toEqual(['↑ 0 W', '↓ 320 W']);
   });
 
+  it('sizes each child arc by its share of the whole parent', async () => {
+    const cfg = structuredClone(full);
+    cfg.consumers!.devices[4] = { ...cfg.consumers!.devices[4], parent: 'sensor.ac' };
+    cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
+    const el = await mount(cfg, { ...fullStates, 'sensor.ac': '1000', 'sensor.tv': '200', 'sensor.pc': '500' });
+    const arcs = Array.from(q(el, '[data-ring="child"]')[0].querySelectorAll('circle')).slice(1);
+    const share = (c: Element) => {
+      const [, , len, circ] = c.getAttribute('stroke-dasharray')!.split(' ').map(Number);
+      return Math.round((len / circ) * 100);
+    };
+    expect(arcs.map(share)).toEqual([20, 50]);
+  });
+
+  it('shows the visible consumers as an inner ring on home, unless home.show_consumers is false', async () => {
+    let el = await mount(full, fullStates);
+    const ring = q(el, '[data-ring="home"]');
+    expect(ring).toHaveLength(1);
+    // Background circle plus one arc per visible consumer.
+    expect(ring[0].querySelectorAll('circle')).toHaveLength(1 + 6);
+    expect(Array.from(ring[0].querySelectorAll('circle')).slice(1).map((c) => c.getAttribute('stroke'))[0]).toBe('#e53935');
+    document.body.innerHTML = '';
+    el = await mount({ ...full, home: { show_consumers: false } }, fullStates);
+    expect(q(el, '[data-ring="home"]')).toHaveLength(0);
+  });
+
   it('marks discharge with an up arrow and charge with a down arrow', async () => {
     const texts = async (b1: string, b2: string) => {
       document.body.innerHTML = '';

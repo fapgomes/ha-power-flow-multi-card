@@ -28,7 +28,8 @@ export interface CardConfig {
   low_carbon?: { entity: string };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };
   battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean };
-  home?: { entity?: string };
+  /** show_consumers: inner ring with the visible consumers' shares of home (default true). */
+  home?: { entity?: string; show_consumers?: boolean };
   consumers?: ConsumersConfig;
 }
 

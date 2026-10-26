@@ -99,6 +99,7 @@ consumers:
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
+| `home.show_consumers` | `true` | Inner ring on home with one arc per visible consumer, in its colour, sized by its share of home; the rest stays grey |
 | `consumers.columns` | `2` | Grid columns to the right of home (horizontal layout only) |
 | `consumers.max_visible` | `6` | Maximum visible consumers (capped at `2 + 3 × columns`, or 12 in the vertical layout) |
 | `consumers.min_power` | `0` | Consumers below this (W) are hidden |

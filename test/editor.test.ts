@@ -74,6 +74,15 @@ describe('editor', () => {
     expect(last(changes).grid).toEqual({ entity: 'sensor.other', name_inside: false });
   });
 
+  it('stores home.show_consumers only when turned off', async () => {
+    const { el, changes } = await mount(base);
+    expect(form(el, 'home').data).toMatchObject({ show_consumers: true });
+    change(el, 'home', { show_consumers: false });
+    expect(last(changes).home).toEqual({ show_consumers: false });
+    change(el, 'home', { entity: 'sensor.house', show_consumers: true });
+    expect(last(changes).home).toEqual({ entity: 'sensor.house' });
+  });
+
   it('stores the layout only when vertical', async () => {
     const { el, changes } = await mount(base);
     expect(form(el, 'layout').data).toEqual({ layout: 'horizontal' });

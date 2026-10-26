@@ -225,15 +225,18 @@ export class PowerFlowMultiCard extends LitElement {
       && c.w >= (devices.get(c.entity)?.min_power ?? globalMin));
   }
 
-  /** Inner ring on a parent with one arc per child, each as long as the child's share of the parent. */
-  private shareRing(c: Circle, total: number, kids: Readings['consumers']): SVGTemplateResult {
-    const rr = c.r - 5;
+  /**
+   * Inner ring with one arc per part, each as long as the part's share of total: children on a
+   * parent consumer, or the visible consumers on home. Whatever the parts don't cover stays grey.
+   */
+  private shareRing(c: Circle, total: number, parts: Readings['consumers'], kind = 'child', inset = 5): SVGTemplateResult {
+    const rr = c.r - inset;
     const circ = 2 * Math.PI * rr;
     let offset = 0;
-    return svg`<g data-ring="child" pointer-events="none">
+    return svg`<g data-ring=${kind} pointer-events="none">
       <circle class="ring-bg" cx=${c.x} cy=${c.y} r=${rr} stroke-width="3"></circle>
-      ${kids.map((k) => {
-        const len = Math.min(Math.max((k.w ?? 0) / total, 0), 1) * (circ - offset);
+      ${parts.map((k) => {
+        const len = Math.min(Math.max((k.w ?? 0) / total, 0) * circ, circ - offset);
         const seg = svg`<circle cx=${c.x} cy=${c.y} r=${rr} fill="none" stroke=${k.color} stroke-width="3"
           stroke-dasharray="0 ${offset} ${len} ${circ}" transform="rotate(-90 ${c.x} ${c.y})"></circle>`;
         offset += len;
@@ -408,6 +411,9 @@ export class PowerFlowMultiCard extends LitElement {
         icon: big ? c.icon ?? 'mdi:flash' : undefined, fontSize: big ? 10 : 8,
       }));
     });
+
+    const shown = visible.filter((c) => (c.w ?? 0) > 0);
+    if (cfg.home?.show_consumers !== false && homeW > 0 && shown.length) rings.push(this.shareRing(home, homeW, shown, 'home', 8));
 
     const homeLayout = PowerFlowMultiCard.iconLayout(home, [], [13], 0.5);
     this.childPills(g, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName }, paths, nodes, fmt);
