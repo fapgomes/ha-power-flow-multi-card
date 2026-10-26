@@ -7,11 +7,11 @@ export const HEIGHT = 430;
 export const BASE_WIDTH = 480;
 
 export const NODES = {
-  lowCarbon: { x: 50, y: 95, r: 28 },
-  grid: { x: 50, y: 210, r: 32 },
-  solar: { x: 170, y: 95, r: 32 },
-  battery: { x: 170, y: 325, r: 32 },
-  home: { x: 290, y: 210, r: 34 },
+  lowCarbon: { x: 50, y: 95, r: 34 },
+  grid: { x: 50, y: 210, r: 38 },
+  solar: { x: 170, y: 95, r: 38 },
+  battery: { x: 170, y: 325, r: 38 },
+  home: { x: 290, y: 210, r: 42 },
 } satisfies Record<string, Circle>;
 
 export const SOLAR_PILLS_Y = 22;
@@ -101,9 +101,13 @@ export function consumerPath(slot: Slot, _index: number, _columns: number, _coun
   // Further columns: run along a lane in the gap between rows, then turn into the slot.
   const lane = laneY(slot);
   const sy = y > h.y ? h.y + 12 : h.y - 12;
+  const sx = Math.round((h.x + Math.sqrt(h.r * h.r - 144)) * 10) / 10;
   const end = y > h.y ? y - r : y < lane ? y + r : y - r;
-  return `M${h.x + 32},${sy} C${h.x + 45},${lane} ${h.x + 60},${lane} ${h.x + 75},${lane} L${x - 15},${lane} Q${x},${lane} ${x},${end}`;
+  return `M${sx},${sy} C${h.x + h.r + 11},${lane} ${h.x + h.r + 26},${lane} ${h.x + LANE_START},${lane} L${x - 15},${lane} Q${x},${lane} ${x},${end}`;
 }
+
+/** Distance right of home's centre where the lanes to the second and later columns run straight. */
+const LANE_START = NODES.home.r + 41;
 
 /** Height of the lane a path to a slot in the second or later column runs along. */
 function laneY(slot: Slot): number {
@@ -117,7 +121,7 @@ export function consumerRoute(slot: Slot): Pt[] {
   const h = NODES.home;
   if (slot.col === undefined || slot.col <= 0) return [h, slot];
   const lane = laneY(slot);
-  return [h, { x: h.x + 75, y: lane }, { x: slot.x, y: lane }, slot];
+  return [h, { x: h.x + LANE_START, y: lane }, { x: slot.x, y: lane }, slot];
 }
 
 export interface Rect { x0: number; y0: number; x1: number; y1: number }

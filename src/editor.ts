@@ -31,7 +31,7 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
-    name_inside: 'Names inside the circles', name_inside_one: 'Name inside the circle', show_percent: 'Children share (%)',
+    show_name: 'Show the name', name_inside: 'Names inside the circles', name_inside_one: 'Name inside the circle', show_percent: 'Children share (%)',
     h_name_inside: 'Only on full-size circles; otherwise the name goes outside',
     h_percent: 'Shown on each child pill; the inner ring on the parent is always shown',
     h_solar: 'Sum of the sources when empty', show_idle: 'Show sources when solar is idle',
@@ -51,7 +51,7 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
-    name_inside: 'Nomes dentro dos círculos', name_inside_one: 'Nome dentro do círculo', show_percent: 'Percentagem das filhas',
+    show_name: 'Mostrar o nome', name_inside: 'Nomes dentro dos círculos', name_inside_one: 'Nome dentro do círculo', show_percent: 'Percentagem das filhas',
     h_name_inside: 'Só nos círculos de tamanho normal; caso contrário, o nome fica por fora',
     h_percent: 'Aparece em cada pastilha filha; o anel interior na mãe aparece sempre',
     h_solar: 'Se vazio, é a soma das fontes', show_idle: 'Mostrar fontes com o solar parado',
@@ -153,16 +153,17 @@ export class PowerFlowMultiCardEditor extends LitElement {
     const devices = consumers.devices ?? [];
     const { devices: _d, ...settings } = consumers;
 
-    const setSolar = (patch: { entity?: string; sources?: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean }) => {
-      const next = { entity: solar.entity, sources, show_idle_sources: solar.show_idle_sources, name_inside: solar.name_inside, ...patch };
+    const setSolar = (patch: { entity?: string; sources?: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean }) => {
+      const next = { entity: solar.entity, sources, show_idle_sources: solar.show_idle_sources, name_inside: solar.name_inside, show_name: solar.show_name, ...patch };
       const list = next.sources ?? [];
       this.emit(withSection(cfg, 'solar', next.entity || list.length
-        ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), ...offOnly({ name_inside: next.name_inside }), sources: list }
+        ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }), sources: list }
         : undefined));
     };
-    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean }) => {
-      const next = { banks, name_inside: cfg.battery?.name_inside, ...patch };
-      this.emit(withSection(cfg, 'battery', next.banks.length ? { banks: next.banks, ...offOnly({ name_inside: next.name_inside }) } : undefined));
+    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean; show_name?: boolean }) => {
+      const next = { banks, name_inside: cfg.battery?.name_inside, show_name: cfg.battery?.show_name, ...patch };
+      this.emit(withSection(cfg, 'battery', next.banks.length
+        ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }) } : undefined));
     };
     const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
     const setConsumers = (s: Data, list: DeviceConfig[]) => {
@@ -208,7 +209,8 @@ export class PowerFlowMultiCardEditor extends LitElement {
       { name: 'name_inside', selector: { boolean: {} }, helper: 'h_name_inside' },
       { name: 'show_percent', selector: { boolean: {} }, helper: 'h_percent' },
     ];
-    const nameInside = { name: 'name_inside', selector: { boolean: {} } };
+    const nameOptions = [{ name: 'show_name', selector: { boolean: {} } }, { name: 'name_inside', selector: { boolean: {} } }];
+    const nameLabels = { show_name: 'show_name', name_inside: 'name_inside_one' } as const;
 
     return html`
       ${this.panel('grid', 'mdi:transmission-tower', html`
@@ -217,18 +219,20 @@ export class PowerFlowMultiCardEditor extends LitElement {
           (v) => this.emit(withSection(cfg, 'low_carbon', v.entity ? { entity: v.entity } : undefined)), { entity: 'fossil' })}`)}
 
       ${this.panel('solar', 'mdi:solar-power', html`
-        ${this.form('solar', { ...compact({ entity: solar.entity, show_idle_sources: solar.show_idle_sources }), name_inside: solar.name_inside !== false },
-          [{ name: 'entity', selector: sensor, helper: 'h_solar' }, { name: 'show_idle_sources', selector: { boolean: {} }, helper: 'h_idle' }, nameInside],
-          (v) => setSolar({ entity: v.entity, show_idle_sources: v.show_idle_sources, name_inside: v.name_inside }),
-          { entity: 'solar_total', show_idle_sources: 'show_idle', name_inside: 'name_inside_one' })}
+        ${this.form('solar', {
+          ...compact({ entity: solar.entity, show_idle_sources: solar.show_idle_sources }),
+          show_name: solar.show_name !== false, name_inside: solar.name_inside !== false,
+        }, [{ name: 'entity', selector: sensor, helper: 'h_solar' }, { name: 'show_idle_sources', selector: { boolean: {} }, helper: 'h_idle' }, ...nameOptions],
+          (v) => setSolar({ entity: v.entity, show_idle_sources: v.show_idle_sources, show_name: v.show_name, name_inside: v.name_inside }),
+          { entity: 'solar_total', show_idle_sources: 'show_idle', ...nameLabels })}
         ${this.list<SolarSourceConfig>('sources', sources, (s) => this.name(s.entity, s.name),
           (s, i) => this.form(`source-${i}`, compact({ entity: s.entity, name: s.name, icon: s.icon }), deviceSchema.slice(0, 3),
             (v) => setSolar({ sources: replaceItem(sources, i, { entity: v.entity ?? '', ...compact({ name: v.name, icon: v.icon }) }) })),
           (list) => setSolar({ sources: list }), () => ({ entity: '' }))}`)}
 
       ${this.panel('battery', 'mdi:battery-high', html`
-        ${this.form('battery', { name_inside: cfg.battery?.name_inside !== false }, [nameInside],
-          (v) => setBattery({ name_inside: v.name_inside }), { name_inside: 'name_inside_one' })}
+        ${this.form('battery', { show_name: cfg.battery?.show_name !== false, name_inside: cfg.battery?.name_inside !== false }, nameOptions,
+          (v) => setBattery({ show_name: v.show_name, name_inside: v.name_inside }), nameLabels)}
         ${this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
         (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
         setBanks, () => ({ power: '', soc: '' }))}`)}

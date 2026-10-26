@@ -127,6 +127,9 @@ describe('editor', () => {
     expect(last(changes).solar).toEqual({ ...base.solar, name_inside: false });
     change(el, 'battery', { name_inside: false });
     expect(last(changes).battery).toEqual({ ...base.battery, name_inside: false });
+    change(el, 'battery', { name_inside: true, show_name: false });
+    expect(last(changes).battery).toEqual({ ...base.battery, show_name: false });
+    expect(form(el, 'solar').data).toMatchObject({ show_name: true });
   });
 
   it('removes the solar section when the total and every source are gone', async () => {

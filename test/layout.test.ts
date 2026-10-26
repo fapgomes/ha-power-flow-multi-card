@@ -13,13 +13,13 @@ describe('consumerSlots', () => {
     const s = consumerSlots(8, 2);
     expect(s.every((x) => x.r === 32)).toBe(true);
     expect(s.map((x) => [x.x, x.y])).toEqual([
-      [290, 95], [290, 325], [364, 210], [364, 95], [364, 325], [434, 210], [434, 95], [434, 325]]);
+      [290, 95], [290, 325], [372, 210], [372, 95], [372, 325], [442, 210], [442, 95], [442, 325]]);
     expect(consumerSlots(20, 2)).toHaveLength(8);
     expect(consumerSlots(0, 2)).toHaveLength(0);
   });
   it('shrinks the columns with the lowest consumers first', () => {
     expect(columnLayout(2).rs).toEqual([32, 32]);
-    expect(columnLayout(3).rs).toEqual([22, 20, 20]);
+    expect(columnLayout(3).rs).toEqual([20, 20, 20]);
     for (const cols of [1, 2, 3, 4, 5]) {
       const s = consumerSlots(50, cols);
       for (let i = 1; i < s.length; i++) expect(s[i].r).toBeLessThanOrEqual(s[i - 1].r);
@@ -48,7 +48,7 @@ describe('viewBox', () => {
     expect(viewBox(2, 'small')).toEqual({ width: 480, height: 430 });
     expect(viewBox(1, 'normal').width).toBe(480);
     expect(viewBox(3, 'small').width).toBe(480);
-    expect(viewBox(4, 'small').width).toBe(512);
+    expect(viewBox(4, 'small').width).toBe(520);
   });
 });
 

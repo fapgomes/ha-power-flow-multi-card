@@ -91,6 +91,33 @@ describe('power-flow-multi-card', () => {
     expect(q(el, 'text.label').map((t) => t.textContent)).not.toContain('Battery');
   });
 
+  it('hides the Solar and Battery names when show_name is false', async () => {
+    const el = await mount({ ...full, solar: { ...full.solar!, show_name: false }, battery: { ...full.battery!, show_name: false } }, fullStates);
+    const all = q(el, 'text').map((t) => t.textContent!.trim());
+    expect(all).not.toContain('Solar');
+    expect(all).not.toContain('Battery');
+  });
+
+  it('draws bigger grid, low-carbon and home circles with bigger text', async () => {
+    const el = await mount(full, fullStates);
+    const r = (kind: string) => Number(q(el, `[data-node="${kind}"] circle`)[0].getAttribute('r'));
+    expect(r('grid')).toBe(38);
+    expect(r('low-carbon')).toBe(34);
+    expect(r('home')).toBe(40);
+    expect(q(el, '[data-node="grid"] text.value').map((t) => t.getAttribute('font-size'))).toEqual(['11', '11']);
+    expect(q(el, '[data-node="home"] text.value')[0].getAttribute('font-size')).toBe('13');
+  });
+
+  it('draws bigger Solar and Battery circles with readable names', async () => {
+    const el = await mount(full, fullStates);
+    for (const kind of ['solar', 'battery']) {
+      const n = q(el, `[data-node="${kind}"]`)[0];
+      expect(Number(n.querySelector('circle')!.getAttribute('r'))).toBe(38);
+      const name = Array.from(n.querySelectorAll('text.value')).find((t) => /Solar|Battery/.test(t.textContent!))!;
+      expect(Number(name.getAttribute('font-size'))).toBeGreaterThanOrEqual(9);
+    }
+  });
+
   it('puts names outside when name_inside is false', async () => {
     const cfg = { ...full, solar: { ...full.solar!, name_inside: false }, battery: { ...full.battery!, name_inside: false },
       consumers: { ...full.consumers!, name_inside: false } };
@@ -151,7 +178,7 @@ describe('power-flow-multi-card', () => {
     for (const [name, c] of [['Solar', { x: 170, y: 95 }], ['Battery', { x: 170, y: 325 }]] as const) {
       const t = q(el, 'text.label').find((x) => x.textContent === name)!;
       const d = Math.hypot(Number(t.getAttribute('x')) - c.x, Number(t.getAttribute('y')) - c.y);
-      expect(d).toBeLessThanOrEqual(32 + 14);
+      expect(d).toBeLessThanOrEqual(38 + 14);
     }
   });
 
@@ -162,9 +189,9 @@ describe('power-flow-multi-card', () => {
     expect(icon.icon).toBe('mdi:battery-60');
     const fo = b.querySelector('foreignObject')!;
     const texts = Array.from(b.querySelectorAll('text.value'));
-    expect(texts.map((t) => t.getAttribute('font-size'))).toEqual(['10', '10', '10', '7']);
+    expect(texts.map((t) => t.getAttribute('font-size'))).toEqual(['11', '11', '11', '9']);
     expect(texts[3].textContent!.trim()).toBe('Battery');
-    expect(Number(texts[3].getAttribute('y'))).toBeLessThan(325 + 32 - 4);
+    expect(Number(texts[3].getAttribute('y'))).toBeLessThan(325 + 38 - 4);
     const iconTop = Number(fo.getAttribute('y'));
     const iconBottom = iconTop + Number(fo.getAttribute('height'));
     expect(Number(texts[0].getAttribute('y'))).toBeLessThan(iconTop);

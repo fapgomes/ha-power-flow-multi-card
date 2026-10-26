@@ -89,8 +89,10 @@ consumers:
 | `low_carbon.entity` | — | Grid fossil fuel percentage; low-carbon = import × (1 − %) |
 | `solar.entity` | sum of the sources | Total solar production |
 | `solar.sources[]` | — | `entity`, `name`, `icon` per source |
+| `solar.show_name` | `true` | Shows the "Solar" name; `false` hides it |
 | `solar.name_inside` | `true` | Writes "Solar" inside the circle; `false` puts it outside |
 | `solar.show_idle_sources` | `false` | Keeps the source pills visible while solar is idle (total below 10 W); by default they are hidden |
+| `battery.show_name` | `true` | Shows the "Battery" name; `false` hides it |
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
