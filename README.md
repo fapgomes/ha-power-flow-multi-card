@@ -118,3 +118,7 @@ npm run build     # gera dist/power-flow-multi-card.js
 Se este projeto te for útil, considera pagar-me um café para o ajudar a continuar:
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-fapgomes-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/fapgomes)
+
+## Licença
+
+[GPL-3.0](LICENSE).
