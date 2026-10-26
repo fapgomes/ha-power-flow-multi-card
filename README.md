@@ -1,63 +1,65 @@
 # Power Flow Multi Card
 
-Card Lovelace para Home Assistant inspirado no
-[power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus), com:
+Lovelace card for Home Assistant inspired by
+[power-flow-card-plus](https://github.com/flixlix/power-flow-card-plus), with:
 
-- **várias fontes solares**: um círculo grande com o total e uma pastilha por fonte;
-- **várias baterias / bancos**: um círculo grande com o SoC e a potência líquida, e uma pastilha por banco;
-- **muitos consumos**: só aparecem os que mais consomem, numa grelha com número de colunas
-  configurável, cada um com a sua cor, e com uma ordenação estável (não "dançam").
+- **multiple solar sources**: a large circle with the total and a small pill per source;
+- **multiple batteries / banks**: a large circle with the SoC and net power, and a pill per bank;
+- **many consumers**: only the biggest ones are shown, in a grid with a configurable number of
+  columns, each with its own colour, and with a stable order (they don't "dance" around);
+- **child consumers**: a device that is part of another one (e.g. an EV charger on a floor
+  circuit) is drawn as a small pill attached to its parent.
 
-Os fluxos entre rede, solar, bateria e casa são calculados com os totais. O card nunca atribui
-fluxos a um painel ou banco individual.
+Flows between grid, solar, battery and home are computed from the totals. The card never
+attributes flows to an individual panel or bank.
 
-## Instalação
+## Installation
 
-**HACS (repositório custom):** HACS → ⋮ → Custom repositories → URL deste repositório,
-categoria *Dashboard*. O HACS procura `power-flow-multi-card.js` nos assets da release do GitHub
-(ou em `dist/` no repositório), por isso cada release tem de ter o ficheiro compilado anexado.
+**HACS (custom repository):** HACS → ⋮ → Custom repositories → this repository's URL, category
+*Dashboard*. HACS downloads `power-flow-multi-card.js` from the GitHub release assets, so every
+release has the built file attached.
 
 **Manual:**
 
 1. `npm ci && npm run build`
-2. Copiar `dist/power-flow-multi-card.js` para `/config/www/`
-3. Definições → Painéis → ⋮ → Recursos → adicionar `/local/power-flow-multi-card.js` como
+2. Copy `dist/power-flow-multi-card.js` to `/config/www/`
+3. Settings → Dashboards → ⋮ → Resources → add `/local/power-flow-multi-card.js` as a
    *JavaScript module*
 
-## Configuração
+## Configuration
 
-O card tem editor visual (secções Rede, Solar, Bateria, Casa e Consumos, com listas para
-adicionar, ordenar e remover fontes, bancos e aparelhos). Tudo o que o editor faz também se pode
-escrever em YAML:
+The card has a visual editor (Grid, Solar, Battery, Home and Consumers sections, with lists to
+add, reorder and remove sources, banks and devices). Everything the editor does can also be
+written in YAML:
 
 ```yaml
 type: custom:power-flow-multi-card
 grid:
-  entity: sensor.grid_power          # + importação, − exportação
-  # ou: entity: { consumption: sensor.grid_import, production: sensor.grid_export }
+  entity: sensor.grid_power          # + import, − export
+  # or: entity: { consumption: sensor.grid_import, production: sensor.grid_export }
   invert: false
 low_carbon:
   entity: sensor.grid_fossil_fuel_percentage
 solar:
-  entity: sensor.pv_total            # opcional; por omissão soma das fontes
+  entity: sensor.pv_total            # optional; defaults to the sum of the sources
   sources:
-    - entity: sensor.pv_telhado_s
-      name: Telhado S
-    - entity: sensor.pv_telhado_e
-      name: Telhado E
-    - entity: sensor.pv_garagem
-      name: Garagem
+    - entity: sensor.pv_roof_south
+      name: Roof S
+    - entity: sensor.pv_roof_east
+      name: Roof E
+    - entity: sensor.pv_garage
+      name: Garage
 battery:
   banks:
-    - power: sensor.bat1_power       # + descarga, − carga (ou {charge, discharge})
+    - power: sensor.bat1_power       # + discharge, − charge (or {charge, discharge})
       soc: sensor.bat1_soc
-      name: Banco 1
-      capacity: 5                    # kWh, opcional
+      name: Bank 1
+      capacity: 5                    # kWh, optional
     - power: sensor.bat2_power
       soc: sensor.bat2_soc
-      name: Banco 2
+      name: Bank 2
 home:
-  entity: sensor.house_power         # opcional
+  entity: sensor.house_power         # optional
 consumers:
   columns: 2
   max_visible: 6
@@ -65,75 +67,75 @@ consumers:
   sort_margin: 10
   sort_hold: 30
   devices:
-    - entity: sensor.ac_power
-      name: AC
+    - entity: sensor.ground_floor_power
+      name: Ground floor
       color: "#e53935"
-      icon: mdi:air-conditioner
-    - entity: sensor.forno_power
-      name: Forno
+      icon: mdi:home-floor-0
+    - entity: sensor.oven_power
+      name: Oven
       color: "#fb8c00"
-      min_power: 50                  # opcional; substitui consumers.min_power
+      min_power: 50                  # optional; overrides consumers.min_power
     - entity: sensor.ev_charger_power
       name: EV Charger
-      parent: sensor.forno_power     # opcional; aparece como pastilha no aparelho-mãe
+      parent: sensor.ground_floor_power  # optional; shown as a pill on the parent
 ```
 
-### Opções
+### Options
 
-| Opção | Por omissão | Descrição |
+| Option | Default | Description |
 |---|---|---|
-| `grid.entity` | obrigatório | Entidade com sinal (+ importação) ou `{consumption, production}` |
-| `grid.invert` | `false` | Inverte o sinal da rede |
-| `low_carbon.entity` | — | Percentagem de combustíveis fósseis da rede; low-carbon = importação × (1 − %) |
-| `solar.entity` | soma das fontes | Total de produção solar |
-| `solar.sources[]` | — | `entity`, `name`, `icon` por fonte |
-| `battery.banks[]` | — | `power` (+ descarga) ou `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
-| `home.entity` | calculado | Consumo da casa; por omissão é o balanço dos fluxos |
-| `consumers.columns` | `2` | Colunas da grelha à direita da casa |
-| `consumers.max_visible` | `6` | Máximo de consumos visíveis (limitado a `2 + 3 × columns`) |
-| `consumers.min_power` | `0` | Abaixo disto (W) o consumo não aparece |
-| `consumers.sort_margin` | `10` | % que um consumo tem de ultrapassar outro para trocar de lugar |
-| `consumers.sort_hold` | `30` | Segundos que essa diferença tem de durar antes de trocar |
-| `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, substitui o global para esse aparelho), `parent` (entidade de outro aparelho; ver abaixo) |
+| `grid.entity` | required | Signed entity (+ import) or `{consumption, production}` |
+| `grid.invert` | `false` | Inverts the grid sign |
+| `low_carbon.entity` | — | Grid fossil fuel percentage; low-carbon = import × (1 − %) |
+| `solar.entity` | sum of the sources | Total solar production |
+| `solar.sources[]` | — | `entity`, `name`, `icon` per source |
+| `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
+| `home.entity` | computed | Home consumption; defaults to the balance of the flows |
+| `consumers.columns` | `2` | Grid columns to the right of home |
+| `consumers.max_visible` | `6` | Maximum visible consumers (capped at `2 + 3 × columns`) |
+| `consumers.min_power` | `0` | Consumers below this (W) are hidden |
+| `consumers.sort_margin` | `10` | % by which a consumer must beat another to swap places |
+| `consumers.sort_hold` | `30` | Seconds that difference must last before swapping |
+| `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, overrides the global one for this device), `parent` (entity of another device; see below) |
 
-### Layout dos consumos
+### Consumer layout
 
-- **Até 4 visíveis:** como no original. Um por cima da casa, um por baixo e dois na coluna da
-  direita, com círculos de tamanho normal.
-- **Mais de 4:** grelha com a coluna da casa (por cima e por baixo) e `columns` colunas à direita,
-  cada uma pela ordem meio, cima, baixo. Quanto maior o consumo, mais perto da casa. Os círculos
-  mantêm o tamanho normal enquanto cabem nos 480 px (até 2 colunas); com mais colunas, encolhem
-  primeiro as colunas dos consumos mais pequenos.
+- **Up to 4 visible:** as in the original. One above home, one below, and two in the right
+  column, at normal size.
+- **More than 4:** a grid with the home column (above and below) and `columns` columns to the
+  right, each filled middle, top, bottom. The bigger the consumer, the closer to home. Circles keep
+  the normal size while they fit in 480 px (up to 2 columns); with more columns, the columns with
+  the smallest consumers shrink first.
 
-### Consumos filhos
+### Child consumers
 
-Um aparelho com `parent` está pendurado noutro (por exemplo, o carregador EV no circuito do
-Piso 0). O valor da mãe já inclui o da filha, por isso a filha:
+A device with `parent` hangs off another one (for example, the EV charger on the ground floor
+circuit). The parent's value already includes the child's, so the child:
 
-- não entra no ranking nem ocupa lugar na grelha;
-- aparece como uma pastilha pequena agarrada à mãe, com linha e bolinhas, quando a mãe está
-  visível e a filha passa a sua potência mínima;
-- fica no primeiro lugar livre à volta da mãe, começando pelo lado oposto à casa.
+- stays out of the ranking and takes no slot in the grid;
+- is drawn as a small pill attached to the parent, with a line and moving dots, when the parent is
+  visible and the child is above its minimum power;
+- sits at the first free spot around the parent, starting on the side facing away from home.
 
-Só há um nível: a mãe não pode ser filha de outro aparelho.
+There is only one level: a parent cannot be a child of another device.
 
-As potências aceitam `W`, `kW` e `MW` (lidas de `unit_of_measurement`).
+Power values accept `W`, `kW` and `MW` (read from `unit_of_measurement`).
 
-## Desenvolvimento
+## Development
 
 ```bash
 npm install
-npm test          # testes unitários (vitest)
-npm run dev       # página de demonstração com dados simulados
-npm run build     # gera dist/power-flow-multi-card.js
+npm test          # unit tests (vitest)
+npm run dev       # demo page with simulated data
+npm run build     # builds dist/power-flow-multi-card.js
 ```
 
-## Apoiar o projeto
+## Support the project
 
-Se este projeto te for útil, considera pagar-me um café para o ajudar a continuar:
+If this project is useful to you, consider buying me a coffee to help keep it going:
 
 [![Buy Me a Coffee](https://img.shields.io/badge/Buy%20Me%20a%20Coffee-fapgomes-FFDD00?logo=buymeacoffee&logoColor=black)](https://buymeacoffee.com/fapgomes)
 
-## Licença
+## License
 
 [GPL-3.0](LICENSE).
