@@ -1,6 +1,6 @@
 {
   "name": "power-flow-multi-card",
-  "version": "0.3.2",
+  "version": "0.3.3",
   "description": "Home Assistant power flow card with multiple solar sources, battery banks and ranked consumers",
   "directories": {
     "doc": "docs"
