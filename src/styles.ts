@@ -45,6 +45,9 @@ export const styles = css`
   [data-node] {
     cursor: pointer;
   }
+  .bold text {
+    font-weight: bold;
+  }
   [data-hover-name] {
     pointer-events: none;
   }

@@ -24,6 +24,8 @@ export interface CardConfig {
   type: string;
   /** horizontal (default): consumers right of home; vertical: grid on top, consumers in rows below home. */
   layout?: 'horizontal' | 'vertical';
+  /** All text in bold (default false). */
+  bold?: boolean;
   grid: { entity: PowerEntity; invert?: boolean; show_name?: boolean; name_inside?: boolean };
   low_carbon?: { entity: string };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };

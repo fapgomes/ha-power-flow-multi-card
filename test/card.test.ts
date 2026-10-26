@@ -262,6 +262,16 @@ describe('power-flow-multi-card', () => {
     expect(q(el, '[data-ring="home"]')).toHaveLength(0);
   });
 
+  it('makes every text bold when bold is set', async () => {
+    let el = await mount(full, fullStates);
+    expect(el.shadowRoot!.querySelector('svg')!.classList.contains('bold')).toBe(false);
+    document.body.innerHTML = '';
+    el = await mount({ ...full, bold: true }, fullStates);
+    expect(el.shadowRoot!.querySelector('svg')!.classList.contains('bold')).toBe(true);
+    const css = (el.constructor as unknown as { styles: { cssText: string } }).styles.cssText;
+    expect(css).toMatch(/\.bold text\s*{\s*font-weight:\s*bold/);
+  });
+
   it('marks discharge with an up arrow and charge with a down arrow', async () => {
     const texts = async (b1: string, b2: string) => {
       document.body.innerHTML = '';

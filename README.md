@@ -85,6 +85,7 @@ consumers:
 | Option | Default | Description |
 |---|---|---|
 | `layout` | `horizontal` | `horizontal`: consumers to the right of home; `vertical`: grid on top, consumers in rows below home (see below) |
+| `bold` | `false` | Makes all text in the card bold |
 | `grid.entity` | required | Signed entity (+ import) or `{consumption, production}` |
 | `grid.invert` | `false` | Inverts the grid sign |
 | `grid.show_name` | `true` | Shows the "Grid" name; `false` hides it |

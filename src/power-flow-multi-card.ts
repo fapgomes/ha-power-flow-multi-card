@@ -419,7 +419,7 @@ export class PowerFlowMultiCard extends LitElement {
     this.childPills(g, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName }, paths, nodes, fmt);
 
     return html`<ha-card>
-      <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg" class=${cfg.bold ? 'bold' : ''}>
         ${hasSolar && solarName === 'outside' ? this.outsideLabel(g.labels.solar, 'Solar') : nothing}
         ${hasBattery && batteryName === 'outside' ? this.outsideLabel(g.labels.battery, 'Battery') : nothing}
         ${paths}

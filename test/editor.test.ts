@@ -85,11 +85,15 @@ describe('editor', () => {
 
   it('stores the layout only when vertical', async () => {
     const { el, changes } = await mount(base);
-    expect(form(el, 'layout').data).toEqual({ layout: 'horizontal' });
+    expect(form(el, 'layout').data).toEqual({ layout: 'horizontal', bold: false });
     change(el, 'layout', { layout: 'vertical' });
     expect(last(changes).layout).toBe('vertical');
     change(el, 'layout', { layout: 'horizontal' });
     expect(last(changes)).not.toHaveProperty('layout');
+    change(el, 'layout', { layout: 'horizontal', bold: true });
+    expect(last(changes).bold).toBe(true);
+    change(el, 'layout', { layout: 'horizontal', bold: false });
+    expect(last(changes)).not.toHaveProperty('bold');
   });
 
   it('adds and removes optional sections', async () => {

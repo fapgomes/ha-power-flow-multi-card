@@ -31,6 +31,7 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
+    bold: 'Bold text',
     show_consumers: 'Consumers ring', h_show_consumers: 'Inner ring with each visible consumer\'s share of home; the rest stays grey',
     layout: 'Layout', horizontal: 'Horizontal (consumers to the right)', vertical: 'Vertical (consumers below, bigger circles)',
     h_layout: 'Vertical is taller and draws everything about 28 % bigger',
@@ -56,6 +57,7 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
+    bold: 'Texto a negrito',
     show_consumers: 'Anel dos consumos', h_show_consumers: 'Anel interior com a parte de cada consumo visível no total da casa; o resto fica cinzento',
     layout: 'Layout', horizontal: 'Horizontal (consumos à direita)', vertical: 'Vertical (consumos por baixo, círculos maiores)',
     h_layout: 'O vertical é mais alto e desenha tudo cerca de 28 % maior',
@@ -231,11 +233,15 @@ export class PowerFlowMultiCardEditor extends LitElement {
     const nameLabels = { show_name: 'show_name', name_inside: 'name_inside_one' } as const;
 
     const layoutSchema: Schema[] = [{ name: 'layout', selector: { select: { mode: 'dropdown', options: [
-      { value: 'horizontal', label: t('horizontal') }, { value: 'vertical', label: t('vertical') }] } }, helper: 'h_layout' }];
+      { value: 'horizontal', label: t('horizontal') }, { value: 'vertical', label: t('vertical') }] } }, helper: 'h_layout' },
+      { name: 'bold', selector: { boolean: {} } }];
 
     return html`
-      ${this.form('layout', { layout: cfg.layout ?? 'horizontal' }, layoutSchema,
-        (v) => this.emit(withSection(cfg, 'layout', v.layout === 'vertical' ? 'vertical' : undefined)))}
+      ${this.form('layout', { layout: cfg.layout ?? 'horizontal', bold: !!cfg.bold }, layoutSchema, (v) => {
+        const current = this.config ?? cfg;
+        const next = withSection(current, 'layout', v.layout === 'vertical' ? 'vertical' : undefined);
+        this.emit(withSection(next, 'bold', v.bold ? true : undefined));
+      })}
       ${this.panel('grid', 'mdi:transmission-tower', html`
         ${this.form('grid', grid, gridSchema, (v) => setGrid(gridFromForm(v as GridForm)), { entity: 'grid_entity' })}
         ${this.form('grid-name', { show_name: cfg.grid?.show_name !== false, name_inside: cfg.grid?.name_inside !== false }, nameOptions,
