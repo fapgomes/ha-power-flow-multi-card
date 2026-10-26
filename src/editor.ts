@@ -31,7 +31,11 @@ const TEXT = {
     capacity: 'Capacity', icon: 'Icon', color: 'Colour', columns: 'Columns', max_visible: 'Maximum visible',
     min_power: 'Minimum power', sort_margin: 'Overtake margin', sort_hold: 'Overtake delay',
     h_grid: '+ import, − export', h_power: '+ discharge, − charge', h_home: 'Computed from the flows when empty',
-    show_name: 'Show the name', name_inside: 'Names inside the circles', name_inside_one: 'Name inside the circle', show_percent: 'Children share (%)',
+    layout: 'Layout', horizontal: 'Horizontal (consumers to the right)', vertical: 'Vertical (consumers below, bigger circles)',
+    h_layout: 'Vertical is taller and draws everything about 28 % bigger',
+    h_columns: 'Horizontal layout only; the vertical one shows 3 per row',
+    show_name: 'Show the name', show_names: 'Show the names', h_show_names: 'When off, a name shows while hovering its circle',
+    name_inside: 'Names inside the circles', name_inside_one: 'Name inside the circle', show_percent: 'Children share (%)',
     h_name_inside: 'Only on full-size circles; otherwise the name goes outside',
     h_percent: 'Shown on each child pill; the inner ring on the parent is always shown',
     h_solar: 'Sum of the sources when empty', show_idle: 'Show sources when solar is idle',
@@ -51,7 +55,11 @@ const TEXT = {
     color: 'Cor', columns: 'Colunas', max_visible: 'Máximo visível', min_power: 'Potência mínima',
     sort_margin: 'Margem para ultrapassar', sort_hold: 'Tempo para ultrapassar',
     h_grid: '+ importação, − exportação', h_power: '+ descarga, − carga', h_home: 'Se vazio, é calculado pelos fluxos',
-    show_name: 'Mostrar o nome', name_inside: 'Nomes dentro dos círculos', name_inside_one: 'Nome dentro do círculo', show_percent: 'Percentagem das filhas',
+    layout: 'Layout', horizontal: 'Horizontal (consumos à direita)', vertical: 'Vertical (consumos por baixo, círculos maiores)',
+    h_layout: 'O vertical é mais alto e desenha tudo cerca de 28 % maior',
+    h_columns: 'Só no layout horizontal; o vertical mostra 3 por linha',
+    show_name: 'Mostrar o nome', show_names: 'Mostrar os nomes', h_show_names: 'Desligado, o nome aparece ao passar o rato sobre o círculo',
+    name_inside: 'Nomes dentro dos círculos', name_inside_one: 'Nome dentro do círculo', show_percent: 'Percentagem das filhas',
     h_name_inside: 'Só nos círculos de tamanho normal; caso contrário, o nome fica por fora',
     h_percent: 'Aparece em cada pastilha filha; o anel interior na mãe aparece sempre',
     h_solar: 'Se vazio, é a soma das fontes', show_idle: 'Mostrar fontes com o solar parado',
@@ -166,9 +174,16 @@ export class PowerFlowMultiCardEditor extends LitElement {
         ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }) } : undefined));
     };
     const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
+    /** The grid entity form knows nothing of the name options, so they are carried over here. */
+    const setGrid = (next: CardConfig['grid']) => {
+      // Read the latest config: two changes can land before the next render.
+      const current = this.config ?? cfg;
+      const { show_name, name_inside, ...rest } = { show_name: current.grid?.show_name, name_inside: current.grid?.name_inside, ...next };
+      this.emit(withSection(current, 'grid', { ...rest, ...offOnly({ show_name, name_inside }) }));
+    };
     const setConsumers = (s: Data, list: DeviceConfig[]) => {
-      const { name_inside, show_percent, ...rest } = s;
-      const kept = { ...compact(rest), ...offOnly({ name_inside, show_percent }) };
+      const { show_name, name_inside, show_percent, ...rest } = s;
+      const kept = { ...compact(rest), ...offOnly({ show_name, name_inside, show_percent }) };
       this.emit(withSection(cfg, 'consumers', list.length || Object.keys(kept).length ? { ...kept, devices: list } : undefined));
     };
 
@@ -201,20 +216,28 @@ export class PowerFlowMultiCardEditor extends LitElement {
     const number = (min: number, max: number | undefined, unit: string) =>
       ({ number: { min, ...(max === undefined ? {} : { max }), mode: 'box', unit_of_measurement: unit } });
     const consumerSchema: Schema[] = [
-      { name: 'columns', selector: number(1, 6, '') },
+      { name: 'columns', selector: number(1, 6, ''), helper: 'h_columns' },
       { name: 'max_visible', selector: number(0, 20, '') },
       { name: 'min_power', selector: number(0, undefined, 'W'), helper: 'h_min_power' },
       { name: 'sort_margin', selector: number(0, 100, '%'), helper: 'h_sort' },
       { name: 'sort_hold', selector: number(0, 600, 's') },
+      { name: 'show_name', selector: { boolean: {} }, helper: 'h_show_names' },
       { name: 'name_inside', selector: { boolean: {} }, helper: 'h_name_inside' },
       { name: 'show_percent', selector: { boolean: {} }, helper: 'h_percent' },
     ];
     const nameOptions = [{ name: 'show_name', selector: { boolean: {} } }, { name: 'name_inside', selector: { boolean: {} } }];
     const nameLabels = { show_name: 'show_name', name_inside: 'name_inside_one' } as const;
 
+    const layoutSchema: Schema[] = [{ name: 'layout', selector: { select: { mode: 'dropdown', options: [
+      { value: 'horizontal', label: t('horizontal') }, { value: 'vertical', label: t('vertical') }] } }, helper: 'h_layout' }];
+
     return html`
+      ${this.form('layout', { layout: cfg.layout ?? 'horizontal' }, layoutSchema,
+        (v) => this.emit(withSection(cfg, 'layout', v.layout === 'vertical' ? 'vertical' : undefined)))}
       ${this.panel('grid', 'mdi:transmission-tower', html`
-        ${this.form('grid', grid, gridSchema, (v) => this.emit(withSection(cfg, 'grid', gridFromForm(v as GridForm))), { entity: 'grid_entity' })}
+        ${this.form('grid', grid, gridSchema, (v) => setGrid(gridFromForm(v as GridForm)), { entity: 'grid_entity' })}
+        ${this.form('grid-name', { show_name: cfg.grid?.show_name !== false, name_inside: cfg.grid?.name_inside !== false }, nameOptions,
+          (v) => setGrid({ ...(this.config ?? cfg).grid, show_name: v.show_name as boolean, name_inside: v.name_inside as boolean }), nameLabels)}
         ${this.form('low_carbon', compact({ entity: cfg.low_carbon?.entity }), [{ name: 'entity', selector: sensor }],
           (v) => this.emit(withSection(cfg, 'low_carbon', v.entity ? { entity: v.entity } : undefined)), { entity: 'fossil' })}`)}
 
@@ -241,8 +264,8 @@ export class PowerFlowMultiCardEditor extends LitElement {
         (v) => this.emit(withSection(cfg, 'home', v.entity ? { entity: v.entity } : undefined)), { entity: 'home_entity' }))}
 
       ${this.panel('consumers', 'mdi:power-plug', html`
-        ${this.form('consumers', { ...settings, name_inside: consumers.name_inside !== false, show_percent: consumers.show_percent !== false },
-          consumerSchema, (v) => setConsumers(v, devices))}
+        ${this.form('consumers', { ...settings, show_name: consumers.show_name !== false, name_inside: consumers.name_inside !== false, show_percent: consumers.show_percent !== false },
+          consumerSchema, (v) => setConsumers(v, devices), { show_name: 'show_names' })}
         ${this.list<DeviceConfig>('devices', devices, (d) => this.name(d.entity, d.name),
           (d, i) => this.form(`device-${i}`, deviceToForm(d), withParent(d),
             (v) => setConsumers(settings, replaceItem(devices, i, deviceFromForm(v as DeviceForm)))),

@@ -1,10 +1,8 @@
 import { html, LitElement, nothing, svg, type PropertyValues, type SVGTemplateResult } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import { computeFlows, totalsFromReadings, type Flows } from './flows';
-import {
-  BANK_PILLS_Y, consumerPath, consumerRoute, consumerSlots, modeFor, NODES, pillRow, PILL_R, PILLS_MAX_WIDTH, placeSatellite,
-  SOLAR_PILLS_Y, viewBox, type Circle, type Obstacles, type Pt, type Rect, type Slot,
-} from './layout';
+import { geometryFor, type Geometry, type Label } from './geometry';
+import { PILL_R, placeSatellite, type Circle, type Obstacles, type Pt, type Rect, type Slot } from './layout';
 import './editor';
 import { ConsumerRanker } from './ranking';
 import { normalizeConfig, readState } from './readings';
@@ -17,33 +15,12 @@ const IDLE_SOLAR_W = 10;
 
 const DASH = '—';
 
-/** "Solar" and "Battery" names when outside, tucked against the circle's upper-right / lower-right edge. */
-const SOLAR_LABEL = { x: NODES.solar.x + NODES.solar.r * 0.84, y: NODES.solar.y - NODES.solar.r * 0.69 };
-const BATTERY_LABEL = { x: NODES.battery.x + NODES.battery.r * 0.84, y: NODES.battery.y + NODES.battery.r * 0.95 };
-
-/** Point on the edge of a circle, in the direction (dx, dy) from its centre. */
-function edge(c: Circle, dx: number, dy: number): Pt {
-  const d = Math.hypot(dx, dy);
-  return { x: Math.round((c.x + (dx / d) * c.r) * 10) / 10, y: Math.round((c.y + (dy / d) * c.r) * 10) / 10 };
+/** Box an outside label of `chars` characters takes, so child pills can avoid it. */
+function labelRect(l: Label, chars: number, size = 10): Rect {
+  const w = chars * size * 0.55;
+  const x0 = l.anchor === 'start' ? l.x : l.anchor === 'end' ? l.x - w : l.x - w / 2;
+  return { x0, y0: l.y - size, x1: x0 + w, y1: l.y + 2 };
 }
-/** Where the diagonal flows leave the solar and battery circles. */
-const SOLAR_OUT = { home: edge(NODES.solar, 10, 30), grid: edge(NODES.solar, -10, 30) };
-const BATTERY_OUT = { home: edge(NODES.battery, 10, -30), grid: edge(NODES.battery, -10, -30) };
-
-/** Where the horizontal flows meet the grid's right edge and home's left edge. */
-const GRID_X = NODES.grid.x + NODES.grid.r;
-const HOME_X = NODES.home.x - NODES.home.r;
-
-/** Rough shape of the fixed flows, so child pills stay off them. */
-const FIXED_ROUTES: Pt[][] = [
-  [{ x: 50, y: 95 }, { x: 50, y: 210 }],
-  [{ x: GRID_X, y: 210 }, { x: HOME_X, y: 210 }],
-  [SOLAR_OUT.home, { x: 205, y: 190 }, { x: HOME_X, y: 205 }],
-  [SOLAR_OUT.grid, { x: 135, y: 190 }, { x: GRID_X, y: 205 }],
-  [BATTERY_OUT.home, { x: 205, y: 225 }, { x: HOME_X, y: 215 }],
-  [{ x: GRID_X, y: 215 }, { x: 140, y: 225 }, BATTERY_OUT.grid],
-  [{ x: 170, y: NODES.solar.y + NODES.solar.r }, { x: 170, y: NODES.battery.y - NODES.battery.r }],
-];
 
 type NameMode = 'inside' | 'outside' | 'none';
 const nameMode = (o?: { show_name?: boolean; name_inside?: boolean }): NameMode =>
@@ -75,6 +52,8 @@ export class PowerFlowMultiCard extends LitElement {
 
   @property({ attribute: false }) hass?: HassLike;
   @state() private config?: CardConfig;
+  /** Consumer whose name shows while hovered, when names are hidden. */
+  @state() private hovered?: { name: string; c: Circle };
 
   private ranker?: ConsumerRanker;
   private visible: string[] = [];
@@ -108,7 +87,7 @@ export class PowerFlowMultiCard extends LitElement {
   }
 
   getCardSize(): number {
-    return 5;
+    return this.config?.layout === 'vertical' ? 9 : 5;
   }
 
   protected willUpdate(changed: PropertyValues): void {
@@ -168,9 +147,13 @@ export class PowerFlowMultiCard extends LitElement {
   private node(
     kind: string, entity: string | undefined, c: Circle, color: string, lines: Line[],
     opts: {
-      label?: string; labelSize?: number; labelBelow?: boolean; icon?: string; iconColor?: string; iconScale?: number;
+      label?: string; labelSize?: number; labelBelow?: boolean;
+      /** Where the label goes when neither above nor below the circle. */
+      labelAt?: Label; icon?: string; iconColor?: string; iconScale?: number;
       /** How many of the lines go above the icon (default 0: icon on top). */
       linesAboveIcon?: number; title?: string; fontSize?: number; strokeWidth?: number;
+      /** Name shown in a floating label while the pointer is over the circle. */
+      hoverName?: string;
     } = {},
   ): SVGTemplateResult {
     const fs = opts.fontSize ?? 10;
@@ -181,23 +164,42 @@ export class PowerFlowMultiCard extends LitElement {
     const layout = withIcon ? PowerFlowMultiCard.iconLayout(c, sizes.slice(0, above), sizes.slice(above), opts.iconScale) : undefined;
     const lineY = (i: number) => (layout ? layout.baselines[i] : c.y - ((lines.length - 1) * lh) / 2 + fs * 0.35 + i * lh);
     const labelY = opts.labelBelow ? c.y + c.r + 12 : c.y - c.r - 6;
-    if (opts.label) {
-      const size = opts.labelSize ?? 10;
-      const half = (opts.label.length * size * 0.55) / 2;
-      this.labelRects.push({ x0: c.x - half, y0: labelY - size, x1: c.x + half, y1: labelY + 2 });
-    }
-    return svg`<g data-node=${kind} @click=${() => this.moreInfo(entity)}>
+    const label: Label = opts.labelAt ?? { x: c.x, y: labelY, anchor: 'middle' };
+    if (opts.label) this.labelRects.push(labelRect(label, opts.label.length, opts.labelSize ?? 10));
+    const hover = opts.hoverName;
+    return svg`<g data-node=${kind} @click=${() => this.moreInfo(entity)}
+      @pointerenter=${hover ? () => { this.hovered = { name: hover, c }; } : undefined}
+      @pointerleave=${hover ? () => { this.hovered = undefined; } : undefined}>
       <title>${opts.title ?? opts.label ?? entity ?? kind}</title>
       <circle class="bg" cx=${c.x} cy=${c.y} r=${c.r} stroke=${color} stroke-width=${opts.strokeWidth ?? 2}></circle>
       ${layout ? this.icon(c, opts.icon!, opts.iconColor ?? color, layout) : nothing}
       ${lines.map((l, i) => svg`<text class="value" x=${c.x} y=${lineY(i)} font-size=${l.size ?? fs}
           style=${l.color ? `fill:${l.color}` : ''}>${l.text}</text>`)}
-      ${opts.label ? svg`<text class="label" x=${c.x} y=${labelY} style=${opts.labelSize ? `font-size:${opts.labelSize}px` : ''}>${opts.label}</text>` : nothing}
+      ${opts.label ? svg`<text class="label" x=${label.x} y=${label.y}
+          style=${`text-anchor:${label.anchor}${opts.labelSize ? `;font-size:${opts.labelSize}px` : ''}`}>${opts.label}</text>` : nothing}
     </g>`;
   }
 
-  private homeRing(f: Flows): SVGTemplateResult {
-    const h = NODES.home;
+  private outsideLabel(l: Label, text: string): SVGTemplateResult {
+    return svg`<text class="label" x=${l.x} y=${l.y} style="text-anchor:${l.anchor}">${text}</text>`;
+  }
+
+  /** Floating name above (or, near the top edge, below) the hovered consumer. */
+  private hoverLabel(width: number): SVGTemplateResult | typeof nothing {
+    const h = this.hovered;
+    if (!h) return nothing;
+    const size = 11;
+    const w = h.name.length * size * 0.58 + 10;
+    const above = h.c.y - h.c.r - 6 - size >= 2;
+    const y = above ? h.c.y - h.c.r - 6 : h.c.y + h.c.r + 6 + size;
+    const x = Math.min(Math.max(h.c.x, w / 2 + 2), width - w / 2 - 2);
+    return svg`<g data-hover-name>
+      <rect x=${x - w / 2} y=${y - size - 1} width=${w} height=${size + 6} rx="4"></rect>
+      <text class="value" x=${x} y=${y} font-size=${size}>${h.name}</text>
+    </g>`;
+  }
+
+  private homeRing(h: Circle, f: Flows): SVGTemplateResult {
     const circ = 2 * Math.PI * h.r;
     const total = f.solarToHome + f.batteryToHome + f.gridToHome;
     const parts = total > 0
@@ -242,22 +244,22 @@ export class PowerFlowMultiCard extends LitElement {
 
   /** Child consumers as small pills on their visible parent, placed clear of everything already drawn. */
   private childPills(
-    r: Readings, cfg: CardConfig, on: Readings['consumers'], visible: Readings['consumers'], slots: Slot[], vb: { width: number; height: number },
+    g: Geometry, cfg: CardConfig, on: Readings['consumers'], visible: Readings['consumers'], slots: Slot[], vb: { width: number; height: number },
     shown: { solarPills: Circle[]; bankPills: Circle[]; hasSolar: boolean; hasBattery: boolean; hasLowCarbon: boolean; solarName: NameMode; batteryName: NameMode },
     paths: SVGTemplateResult[], nodes: SVGTemplateResult[],
     fmt: (w: number | null) => string,
   ): void {
     if (!on.length) return;
 
-    const { solar, battery, lowCarbon, grid, home } = NODES;
+    const { solar, battery, lowCarbon, grid, home } = g.nodes;
     const { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName } = shown;
     const obstacles: Obstacles = {
       circles: [grid, home, ...slots, ...(hasSolar ? [solar, ...solarPills] : []), ...(hasBattery ? [battery, ...bankPills] : []),
         ...(hasLowCarbon ? [lowCarbon] : [])],
       rects: [...this.labelRects,
-        ...(hasSolar && solarName === 'outside' ? [{ x0: SOLAR_LABEL.x, y0: SOLAR_LABEL.y - 10, x1: SOLAR_LABEL.x + 28, y1: SOLAR_LABEL.y + 2 }] : []),
-        ...(hasBattery && batteryName === 'outside' ? [{ x0: BATTERY_LABEL.x, y0: BATTERY_LABEL.y - 10, x1: BATTERY_LABEL.x + 38, y1: BATTERY_LABEL.y + 2 }] : [])],
-      segments: [...FIXED_ROUTES, ...slots.map((s) => consumerRoute(s))].flatMap(segments),
+        ...(hasSolar && solarName === 'outside' ? [labelRect(g.labels.solar, 5)] : []),
+        ...(hasBattery && batteryName === 'outside' ? [labelRect(g.labels.battery, 7)] : [])],
+      segments: [...g.fixedRoutes, ...slots.map((s) => g.consumerRoute(s))].flatMap(segments),
     };
 
     visible.forEach((parent, i) => {
@@ -295,22 +297,24 @@ export class PowerFlowMultiCard extends LitElement {
     const consumersById = new Map(r.consumers.map((c) => [c.id, c]));
     const visible = this.visible.map((id) => consumersById.get(id)).filter((c) => c !== undefined);
     const columns = cfg.consumers?.columns ?? 2;
-    const slots = consumerSlots(visible.length, columns);
-    const mode = modeFor(visible.length);
-    const vb = viewBox(columns, mode);
+    const g = geometryFor(cfg.layout);
+    // Names go outside the circles when hidden-inside is off; the vertical rows then need more room.
+    const namesOutside = cfg.consumers?.show_name !== false && cfg.consumers?.name_inside === false;
+    const slots = g.slots(visible.length, columns, namesOutside);
+    const vb = g.viewBox(visible.length, columns, namesOutside);
 
-    const { grid, solar, battery, home, lowCarbon } = NODES;
+    const { grid, solar, battery, home, lowCarbon } = g.nodes;
     const solarActive = cfg.solar?.show_idle_sources || (r.solarTotal ?? 0) >= IDLE_SOLAR_W;
-    const solarPills = solarActive ? pillRow(r.solarSources.length, solar.x, SOLAR_PILLS_Y, PILLS_MAX_WIDTH) : [];
-    const bankPills = pillRow(r.banks.length, battery.x, BANK_PILLS_Y, PILLS_MAX_WIDTH);
+    const solarPills = solarActive ? g.solarPills(r.solarSources.length) : [];
+    const bankPills = g.bankPills(r.banks.length);
     const fmt = (w: number | null) => (w === null ? DASH : formatPower(w));
     const homeW = r.homeEntityW ?? f.home;
 
     const paths: SVGTemplateResult[] = [];
     if (hasLowCarbon) {
-      paths.push(this.flow('lowcarbon-grid', `M${lowCarbon.x},${lowCarbon.y + lowCarbon.r} L${grid.x},${grid.y - grid.r}`, COLORS.lowCarbon, f.lowCarbon));
+      paths.push(this.flow('lowcarbon-grid', g.flows.lowCarbonGrid, COLORS.lowCarbon, f.lowCarbon));
     }
-    paths.push(this.flow('grid-home', `M${GRID_X},210 L${HOME_X},210`, COLORS.gridImport, f.gridToHome));
+    paths.push(this.flow('grid-home', g.flows.gridHome, COLORS.gridImport, f.gridToHome));
     if (hasSolar) {
       solarPills.forEach((p, i) => {
         const midY = (p.y + p.r + solar.y - solar.r) / 2;
@@ -318,8 +322,8 @@ export class PowerFlowMultiCard extends LitElement {
         paths.push(this.flow(`solar-src-${i}`, `M${p.x},${p.y + p.r} C${p.x},${midY} ${tx},${midY} ${tx},${solar.y - solar.r + 1}`,
           COLORS.solar, r.solarSources[i].w ?? 0, { kind: 'solar-source', r: 2.5 }));
       });
-      paths.push(this.flow('solar-home', `M${SOLAR_OUT.home.x},${SOLAR_OUT.home.y} C190,195 220,205 ${HOME_X},205`, COLORS.solar, f.solarToHome));
-      paths.push(this.flow('solar-grid', `M${SOLAR_OUT.grid.x},${SOLAR_OUT.grid.y} C150,195 120,205 ${GRID_X},205`, COLORS.gridExport, f.solarToGrid));
+      paths.push(this.flow('solar-home', g.flows.solarHome, COLORS.solar, f.solarToHome));
+      paths.push(this.flow('solar-grid', g.flows.solarGrid, COLORS.gridExport, f.solarToGrid));
     }
     if (hasBattery) {
       bankPills.forEach((p, i) => {
@@ -329,14 +333,14 @@ export class PowerFlowMultiCard extends LitElement {
         paths.push(this.flow(`bank-${i}`, `M${sx},${battery.y + battery.r - 1} C${sx},${midY} ${p.x},${midY} ${p.x},${p.y - p.r}`,
           w >= 0 ? COLORS.batteryDischarge : COLORS.batteryCharge, Math.abs(w), { reverse: w > 0, kind: 'bank', r: 2.5 }));
       });
-      paths.push(this.flow('battery-home', `M${BATTERY_OUT.home.x},${BATTERY_OUT.home.y} C190,225 220,215 ${HOME_X},215`, COLORS.batteryDischarge, f.batteryToHome));
-      paths.push(this.flow('grid-battery', `M${GRID_X},215 C120,215 150,225 ${BATTERY_OUT.grid.x},${BATTERY_OUT.grid.y}`,
+      paths.push(this.flow('battery-home', g.flows.batteryHome, COLORS.batteryDischarge, f.batteryToHome));
+      paths.push(this.flow('grid-battery', g.flows.gridBattery,
         f.batteryToGrid > 0 ? COLORS.batteryDischarge : COLORS.gridImport,
         Math.max(f.gridToBattery, f.batteryToGrid), { reverse: f.batteryToGrid > 0 }));
-      if (hasSolar) paths.push(this.flow('solar-battery', `M${solar.x},${solar.y + solar.r} L${battery.x},${battery.y - battery.r}`, COLORS.batteryCharge, f.solarToBattery));
+      if (hasSolar) paths.push(this.flow('solar-battery', g.flows.solarBattery, COLORS.batteryCharge, f.solarToBattery));
     }
     visible.forEach((c, i) => {
-      paths.push(this.flow(`consumer-${i}`, consumerPath(slots[i], i, columns, visible.length), c.color, c.w ?? 0,
+      paths.push(this.flow(`consumer-${i}`, g.consumerPath(slots[i]), c.color, c.w ?? 0,
         { kind: 'consumer', r: slots[i].r >= 28 ? 2.5 : 2 }));
     });
 
@@ -346,10 +350,15 @@ export class PowerFlowMultiCard extends LitElement {
         [{ text: r.fossilPct === null ? DASH : formatPower(f.lowCarbon) }], { label: 'Low-carbon', icon: 'mdi:leaf', fontSize: 11, strokeWidth: 2.5 }));
     }
     const gridEntity = typeof cfg.grid.entity === 'string' ? cfg.grid.entity : cfg.grid.entity.consumption;
+    const gridName = nameMode(cfg.grid);
     nodes.push(this.node('grid', gridEntity, grid, COLORS.gridImport, [
       { text: `← ${fmt(r.gridExport)}`, color: COLORS.gridExport },
       { text: `→ ${fmt(r.gridImport)}`, color: COLORS.gridImport },
-    ], { label: 'Grid', labelBelow: true, icon: 'mdi:transmission-tower', fontSize: 11, strokeWidth: 2.5, iconScale: 0.5 }));
+      ...(gridName === 'inside' ? [nameLine('Grid', 9)] : []),
+    ], {
+      label: gridName === 'outside' ? 'Grid' : undefined, labelBelow: true, labelAt: g.labels.grid, icon: 'mdi:transmission-tower',
+      fontSize: 11, strokeWidth: 2.5, iconScale: gridName === 'inside' ? 0.4 : 0.5,
+    }));
     if (hasSolar) {
       nodes.push(this.node('solar', cfg.solar!.entity ?? r.solarSources[0]?.entity, solar, COLORS.solar,
         solarName === 'inside' ? [{ text: fmt(r.solarTotal) }, nameLine('Solar', 10)] : [{ text: fmt(r.solarTotal) }],
@@ -385,26 +394,29 @@ export class PowerFlowMultiCard extends LitElement {
       // Full-size circles get the icon; grid columns sit closer together, so their names are shorter.
       const big = s.r >= 28;
       // Only full-size circles have room for the name inside.
-      const inside = big && cfg.consumers?.name_inside !== false;
+      const showName = cfg.consumers?.show_name !== false;
+      const inside = showName && big && cfg.consumers?.name_inside !== false;
+      const outside = showName && !inside;
       const name = truncate(c.name, 11);
       const kids = children.filter((k) => k.parent === c.entity);
       if (kids.length && c.w) rings.push(this.shareRing(s, c.w, kids));
       nodes.push(this.node('consumer', c.entity, s, c.color, inside ? [{ text: fmt(c.w) }, nameLine(name, Math.min(9, CONSUMER_NAME_WIDTH / (name.length * 0.55)))] : [{ text: fmt(c.w) }], {
-        label: inside ? undefined : truncate(c.name, s.col === undefined ? 16 : big ? 11 : 9), labelSize: big ? undefined : 8,
+        label: outside ? truncate(c.name, s.col === undefined ? 16 : big ? 11 : 9) : undefined, labelSize: big ? undefined : 8,
+        hoverName: showName ? undefined : c.name,
         title: `${c.name}: ${fmt(c.w)}`, labelBelow: s.labelBelow, iconScale: inside ? 0.42 : undefined,
         icon: big ? c.icon ?? 'mdi:flash' : undefined, fontSize: big ? 10 : 8,
       }));
     });
 
     const homeLayout = PowerFlowMultiCard.iconLayout(home, [], [13], 0.5);
-    this.childPills(r, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName }, paths, nodes, fmt);
+    this.childPills(g, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName }, paths, nodes, fmt);
 
     return html`<ha-card>
       <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg">
-        ${hasSolar && solarName === 'outside' ? svg`<text class="label" x=${SOLAR_LABEL.x} y=${SOLAR_LABEL.y} style="text-anchor:start">Solar</text>` : nothing}
-        ${hasBattery && batteryName === 'outside' ? svg`<text class="label" x=${BATTERY_LABEL.x} y=${BATTERY_LABEL.y} style="text-anchor:start">Battery</text>` : nothing}
+        ${hasSolar && solarName === 'outside' ? this.outsideLabel(g.labels.solar, 'Solar') : nothing}
+        ${hasBattery && batteryName === 'outside' ? this.outsideLabel(g.labels.battery, 'Battery') : nothing}
         ${paths}
-        ${this.homeRing(f)}
+        ${this.homeRing(home, f)}
         <g data-node="home" @click=${() => this.moreInfo(cfg.home?.entity)}>
           <title>Home</title>
           <circle class="bg" cx=${home.x} cy=${home.y} r=${home.r - 2}></circle>
@@ -413,6 +425,7 @@ export class PowerFlowMultiCard extends LitElement {
         </g>
         ${nodes}
         ${rings}
+        ${this.hoverLabel(vb.width)}
       </svg>
     </ha-card>`;
   }

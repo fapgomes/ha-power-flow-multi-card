@@ -84,8 +84,11 @@ consumers:
 
 | Option | Default | Description |
 |---|---|---|
+| `layout` | `horizontal` | `horizontal`: consumers to the right of home; `vertical`: grid on top, consumers in rows below home (see below) |
 | `grid.entity` | required | Signed entity (+ import) or `{consumption, production}` |
 | `grid.invert` | `false` | Inverts the grid sign |
+| `grid.show_name` | `true` | Shows the "Grid" name; `false` hides it |
+| `grid.name_inside` | `true` | Writes "Grid" inside the circle; `false` puts it outside |
 | `low_carbon.entity` | — | Grid fossil fuel percentage; low-carbon = import × (1 − %) |
 | `solar.entity` | sum of the sources | Total solar production |
 | `solar.sources[]` | — | `entity`, `name`, `icon` per source |
@@ -96,11 +99,12 @@ consumers:
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
-| `consumers.columns` | `2` | Grid columns to the right of home |
-| `consumers.max_visible` | `6` | Maximum visible consumers (capped at `2 + 3 × columns`) |
+| `consumers.columns` | `2` | Grid columns to the right of home (horizontal layout only) |
+| `consumers.max_visible` | `6` | Maximum visible consumers (capped at `2 + 3 × columns`, or 12 in the vertical layout) |
 | `consumers.min_power` | `0` | Consumers below this (W) are hidden |
 | `consumers.sort_margin` | `10` | % by which a consumer must beat another to swap places |
 | `consumers.sort_hold` | `30` | Seconds that difference must last before swapping |
+| `consumers.show_name` | `true` | Shows consumer names; `false` hides them and shows a name only while hovering its circle |
 | `consumers.name_inside` | `true` | Names inside full-size consumer circles; `false` puts them outside. Shrunken circles always have the name outside |
 | `consumers.show_percent` | `true` | Shows each child's share of its parent (%) on the child pill |
 | `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, overrides the global one for this device), `parent` (entity of another device; see below) |
@@ -113,6 +117,14 @@ consumers:
   right, each filled middle, top, bottom. The bigger the consumer, the closer to home. Circles keep
   the normal size while they fit in 480 px (up to 2 columns); with more columns, the columns with
   the smallest consumers shrink first.
+
+### Vertical layout
+
+With `layout: vertical` the same cross of flows is turned on its side: grid on top, home below it,
+solar on the left and battery on the right. Consumers go in rows of three under home, the biggest
+straight below it; paths to the lower rows run down the gaps between the circles. The drawing is
+narrower, so at the same card width every circle and text is about 28 % bigger; the card is taller
+and grows by one row for every three consumers (up to 12).
 
 ### Child consumers
 

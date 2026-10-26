@@ -65,6 +65,24 @@ describe('editor', () => {
     expect(last(changes).solar).toEqual(base.solar);
   });
 
+  it('keeps the grid name options when the grid entity changes', async () => {
+    const { el, changes } = await mount(base);
+    expect(form(el, 'grid-name').data).toEqual({ show_name: true, name_inside: true });
+    change(el, 'grid-name', { show_name: true, name_inside: false });
+    expect(last(changes).grid).toEqual({ ...base.grid, name_inside: false });
+    change(el, 'grid', { mode: 'single', entity: 'sensor.other' });
+    expect(last(changes).grid).toEqual({ entity: 'sensor.other', name_inside: false });
+  });
+
+  it('stores the layout only when vertical', async () => {
+    const { el, changes } = await mount(base);
+    expect(form(el, 'layout').data).toEqual({ layout: 'horizontal' });
+    change(el, 'layout', { layout: 'vertical' });
+    expect(last(changes).layout).toBe('vertical');
+    change(el, 'layout', { layout: 'horizontal' });
+    expect(last(changes)).not.toHaveProperty('layout');
+  });
+
   it('adds and removes optional sections', async () => {
     const { el, changes } = await mount(base);
     change(el, 'low_carbon', { entity: 'sensor.fossil' });
@@ -117,7 +135,9 @@ describe('editor', () => {
 
   it('stores the name and percentage options only when turned off', async () => {
     const { el, changes } = await mount(base);
-    expect(form(el, 'consumers').data).toMatchObject({ name_inside: true, show_percent: true });
+    expect(form(el, 'consumers').data).toMatchObject({ show_name: true, name_inside: true, show_percent: true });
+    change(el, 'consumers', { ...form(el, 'consumers').data, show_name: false });
+    expect(last(changes).consumers).toMatchObject({ show_name: false });
     change(el, 'consumers', { ...form(el, 'consumers').data, name_inside: false, show_percent: false });
     expect(last(changes).consumers).toMatchObject({ name_inside: false, show_percent: false });
     change(el, 'consumers', { ...form(el, 'consumers').data, name_inside: true, show_percent: true });

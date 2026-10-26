@@ -141,3 +141,12 @@ describe('consumer parents', () => {
   });
 });
 
+
+describe('layout', () => {
+  const base: CardConfig = { type: 'x', grid: { entity: 'sensor.g' }, consumers: { columns: 2, max_visible: 11, devices: [] } };
+  it('caps max_visible at what the layout can show', () => {
+    expect(normalizeConfig(structuredClone(base)).consumers!.max_visible).toBe(8);
+    expect(normalizeConfig({ ...structuredClone(base), layout: 'vertical' }).consumers!.max_visible).toBe(11);
+    expect(normalizeConfig({ ...structuredClone(base), layout: 'vertical', consumers: { max_visible: 30, devices: [] } }).consumers!.max_visible).toBe(12);
+  });
+});

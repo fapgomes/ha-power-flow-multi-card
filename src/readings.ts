@@ -1,3 +1,4 @@
+import { geometryFor } from './geometry';
 import type { BankPower, CardConfig, HassLike, Readings } from './types';
 import { toWatts } from './units';
 
@@ -25,7 +26,7 @@ export function normalizeConfig(config: CardConfig): CardConfig {
   });
   if (!config.consumers) return config;
   const columns = Math.max(1, Math.floor(config.consumers.columns ?? 2));
-  const capacity = 2 + 3 * columns;
+  const capacity = geometryFor(config.layout).capacity(columns);
   return {
     ...config,
     consumers: {

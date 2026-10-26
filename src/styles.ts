@@ -45,6 +45,13 @@ export const styles = css`
   [data-node] {
     cursor: pointer;
   }
+  [data-hover-name] {
+    pointer-events: none;
+  }
+  [data-hover-name] rect {
+    fill: var(--card-background-color, #1c1c1c);
+    stroke: var(--divider-color, #333);
+  }
   foreignObject {
     overflow: visible;
   }

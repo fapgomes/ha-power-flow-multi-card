@@ -11,6 +11,8 @@ export interface ConsumersConfig {
   min_power?: number;
   sort_margin?: number;
   sort_hold?: number;
+  /** Consumer names (default true); when false a name only shows while hovering its circle. */
+  show_name?: boolean;
   /** Name inside full-size circles (default true). */
   name_inside?: boolean;
   /** Child share as a percentage on each child pill (default true). */
@@ -20,7 +22,9 @@ export interface ConsumersConfig {
 
 export interface CardConfig {
   type: string;
-  grid: { entity: PowerEntity; invert?: boolean };
+  /** horizontal (default): consumers right of home; vertical: grid on top, consumers in rows below home. */
+  layout?: 'horizontal' | 'vertical';
+  grid: { entity: PowerEntity; invert?: boolean; show_name?: boolean; name_inside?: boolean };
   low_carbon?: { entity: string };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };
   battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean };

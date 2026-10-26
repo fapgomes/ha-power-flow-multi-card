@@ -1,7 +1,10 @@
 export interface Pt { x: number; y: number }
 export interface Circle extends Pt { r: number }
-/** col: consumer column right of home (−1 for the home column), undefined in normal mode. */
-export interface Slot extends Circle { labelBelow: boolean; col?: number }
+/**
+ * col: consumer column right of home (−1 for the home column), undefined in normal mode.
+ * row: consumer row below home, in the vertical layout.
+ */
+export interface Slot extends Circle { labelBelow: boolean; col?: number; row?: number }
 
 export const HEIGHT = 430;
 export const BASE_WIDTH = 480;

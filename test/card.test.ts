@@ -80,6 +80,24 @@ describe('power-flow-multi-card', () => {
     expect(q(el, '[data-node="solar-source"] text.value').map((t) => t.textContent!.trim())).toEqual(['0 W', '0 W', '1 W']);
   });
 
+  it('draws the vertical layout: grid above home, solar left of battery, consumers in rows below home', async () => {
+    const el = await mount({ ...full, layout: 'vertical' }, fullStates);
+    const centre = (kind: string) => {
+      const c = q(el, `[data-node="${kind}"] circle`)[0];
+      return { x: Number(c.getAttribute('cx')), y: Number(c.getAttribute('cy')), r: Number(c.getAttribute('r')) };
+    };
+    const [grid, home, solar, battery] = ['grid', 'home', 'solar', 'battery'].map(centre);
+    expect(grid.x).toBe(home.x);
+    expect(grid.y).toBeLessThan(home.y);
+    expect(solar.y).toBe(battery.y);
+    expect(solar.x).toBeLessThan(battery.x);
+    const consumers = q(el, '[data-node="consumer"] circle').map((c) => Number(c.getAttribute('cy')));
+    expect(consumers).toHaveLength(6);
+    expect(consumers.every((y) => y > home.y + home.r)).toBe(true);
+    expect(el.shadowRoot!.querySelector('svg')!.getAttribute('viewBox')).toMatch(/^0 0 376 /);
+    expect(q(el, '[data-node="grid"] text.value').map((t) => t.textContent!.trim())).toContain('Grid');
+  });
+
   it('puts names inside the circles by default', async () => {
     const el = await mount(full, fullStates);
     const values = (sel: string) => q(el, `${sel} text.value`).map((t) => t.textContent!.trim());
@@ -104,7 +122,7 @@ describe('power-flow-multi-card', () => {
     expect(r('grid')).toBe(38);
     expect(r('low-carbon')).toBe(34);
     expect(r('home')).toBe(40);
-    expect(q(el, '[data-node="grid"] text.value').map((t) => t.getAttribute('font-size'))).toEqual(['11', '11']);
+    expect(q(el, '[data-node="grid"] text.value').map((t) => t.getAttribute('font-size'))).toEqual(['11', '11', '9']);
     expect(q(el, '[data-node="home"] text.value')[0].getAttribute('font-size')).toBe('13');
   });
 
@@ -116,6 +134,33 @@ describe('power-flow-multi-card', () => {
       const name = Array.from(n.querySelectorAll('text.value')).find((t) => /Solar|Battery/.test(t.textContent!))!;
       expect(Number(name.getAttribute('font-size'))).toBeGreaterThanOrEqual(9);
     }
+  });
+
+  it('hides consumer names when show_name is false and shows one while hovering its circle', async () => {
+    const el = await mount({ ...full, consumers: { ...full.consumers!, show_name: false } }, fullStates);
+    const consumer = q(el, '[data-node="consumer"]')[0];
+    expect(Array.from(consumer.querySelectorAll('text')).map((t) => t.textContent!.trim())).toEqual(['900 W']);
+    expect(q(el, '[data-hover-name]')).toHaveLength(0);
+    consumer.dispatchEvent(new Event('pointerenter'));
+    await el.updateComplete;
+    expect(q(el, '[data-hover-name] text').map((t) => t.textContent)).toEqual(['ac']);
+    consumer.dispatchEvent(new Event('pointerleave'));
+    await el.updateComplete;
+    expect(q(el, '[data-hover-name]')).toHaveLength(0);
+  });
+
+  it('writes Grid inside its circle by default, outside or not at all by option', async () => {
+    const gridTexts = async (grid: CardConfig['grid']) => {
+      document.body.innerHTML = '';
+      const el = await mount({ ...full, grid }, fullStates);
+      return {
+        inside: q(el, '[data-node="grid"] text.value').map((t) => t.textContent!.trim()).includes('Grid'),
+        outside: q(el, 'text.label').map((t) => t.textContent).includes('Grid'),
+      };
+    };
+    expect(await gridTexts({ entity: 'sensor.grid' })).toEqual({ inside: true, outside: false });
+    expect(await gridTexts({ entity: 'sensor.grid', name_inside: false })).toEqual({ inside: false, outside: true });
+    expect(await gridTexts({ entity: 'sensor.grid', show_name: false })).toEqual({ inside: false, outside: false });
   });
 
   it('puts names outside when name_inside is false', async () => {
