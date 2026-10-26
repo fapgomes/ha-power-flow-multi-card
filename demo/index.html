@@ -1,0 +1,22 @@
+<!doctype html>
+<html lang="pt">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Power Flow Multi Card — demo</title>
+  <style>
+    body { background: #111; color: #e1e1e1; font-family: Roboto, Arial, sans-serif; margin: 16px; }
+    .row { display: flex; gap: 24px; flex-wrap: wrap; }
+    .slot { width: 480px; background: #1c1c1c; border-radius: 12px; }
+    h3 { font-weight: 400; color: #9b9b9b; }
+  </style>
+</head>
+<body>
+  <div class="row">
+    <div><h3>4 consumos</h3><div class="slot" id="c4"></div></div>
+    <div><h3>20 consumos, max_visible: 6</h3><div class="slot" id="c6"></div></div>
+    <div><h3>20 consumos, max_visible: 8</h3><div class="slot" id="c8"></div></div>
+  </div>
+  <script type="module" src="./main.ts"></script>
+</body>
+</html>

@@ -1,0 +1,27 @@
+{
+  "name": "power-flow-multi-card",
+  "version": "0.2.2",
+  "description": "Home Assistant power flow card with multiple solar sources, battery banks and ranked consumers",
+  "directories": {
+    "doc": "docs"
+  },
+  "scripts": {
+    "build": "vite build",
+    "dev": "vite demo",
+    "test": "vitest run"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "MIT",
+  "dependencies": {
+    "lit": "^3.3.3"
+  },
+  "devDependencies": {
+    "happy-dom": "^21.0.4",
+    "typescript": "^5.9.3",
+    "vite": "^5.4.21",
+    "vitest": "^2.1.9"
+  },
+  "type": "module",
+  "private": true
+}
