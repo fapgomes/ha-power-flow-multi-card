@@ -13,8 +13,15 @@ export function normalizeConfig(config: CardConfig): CardConfig {
     if (!p || (typeof p !== 'string' && !(p.charge && p.discharge))) throw new Error(`battery.banks[${i}].power is required`);
     if (!b.soc) throw new Error(`battery.banks[${i}].soc is required`);
   });
-  config.consumers?.devices?.forEach((d, i) => {
+  const devices = config.consumers?.devices ?? [];
+  devices.forEach((d, i) => {
     if (!d?.entity) throw new Error(`consumers.devices[${i}].entity is required`);
+    if (d.parent === undefined) return;
+    // One level only: the parent must be another device that has no parent itself.
+    const parent = devices.find((p) => p?.entity === d.parent);
+    if (!parent || parent === d || parent.parent) {
+      throw new Error(`consumers.devices[${i}].parent must be another device without a parent`);
+    }
   });
   if (!config.consumers) return config;
   const columns = Math.max(1, Math.floor(config.consumers.columns ?? 2));
@@ -120,6 +127,7 @@ export function readState(hass: HassLike, config: CardConfig): Readings {
       color: d.color ?? DEFAULT_CONSUMER_COLOR,
       icon: d.icon,
       w: watts(hass, d.entity),
+      parent: d.parent,
     })),
   };
 }

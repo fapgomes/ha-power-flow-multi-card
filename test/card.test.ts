@@ -68,6 +68,37 @@ describe('power-flow-multi-card', () => {
     expect(titles).toHaveLength(6);
   });
 
+  it('shows a child consumer as a pill on its parent, outside the ranking', async () => {
+    const cfg = structuredClone(full);
+    cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
+    const el = await mount(cfg, fullStates);
+    const titles = q(el, '[data-node="consumer"] title').map((t) => t.textContent!.split(':')[0]);
+    expect(titles).toEqual(['ac', 'forno', 'mlr', 'frig', 'tv', 'router']);
+    const child = q(el, '[data-node="child"]');
+    expect(child).toHaveLength(1);
+    expect(child[0].querySelector('title')!.textContent).toBe('pc: 80 W');
+    expect(q(el, '[data-flow="child"]')).toHaveLength(1);
+    expect(q(el, '[data-dot="child-0-0"]')).toHaveLength(1);
+  });
+
+  it('hides a child that is off or whose parent is not visible', async () => {
+    const cfg = structuredClone(full);
+    cfg.consumers!.devices[5] = { ...cfg.consumers!.devices[5], parent: 'sensor.ac' };
+    expect(q(await mount(cfg, { ...fullStates, 'sensor.pc': '0' }), '[data-node="child"]')).toHaveLength(0);
+    document.body.innerHTML = '';
+    cfg.consumers!.devices[0] = { ...cfg.consumers!.devices[0], min_power: 1000 };
+    expect(q(await mount(cfg, fullStates), '[data-node="child"]')).toHaveLength(0);
+  });
+
+  it('centres the icon and a single value vertically in the circle', async () => {
+    const el = await mount(full, fullStates);
+    const home = q(el, '[data-node="home"]')[0];
+    const cy = 210;
+    const iconTop = Number(home.querySelector('foreignObject')!.getAttribute('y'));
+    const baseline = Number(home.querySelector('text.value')!.getAttribute('y'));
+    expect(Math.abs((cy - iconTop) - (baseline - cy))).toBeLessThanOrEqual(1);
+  });
+
   it('omits optional sections cleanly', async () => {
     const el = await mount({ type: 'custom:power-flow-multi-card', grid: { entity: 'sensor.grid' } }, { 'sensor.grid': '100' });
     expect(q(el, '[data-node="battery"]')).toHaveLength(0);

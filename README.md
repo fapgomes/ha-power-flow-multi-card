@@ -73,6 +73,9 @@ consumers:
       name: Forno
       color: "#fb8c00"
       min_power: 50                  # opcional; substitui consumers.min_power
+    - entity: sensor.ev_charger_power
+      name: EV Charger
+      parent: sensor.forno_power     # opcional; aparece como pastilha no aparelho-mãe
 ```
 
 ### Opções
@@ -91,7 +94,7 @@ consumers:
 | `consumers.min_power` | `0` | Abaixo disto (W) o consumo não aparece |
 | `consumers.sort_margin` | `10` | % que um consumo tem de ultrapassar outro para trocar de lugar |
 | `consumers.sort_hold` | `30` | Segundos que essa diferença tem de durar antes de trocar |
-| `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, substitui o global para esse aparelho) |
+| `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, substitui o global para esse aparelho), `parent` (entidade de outro aparelho; ver abaixo) |
 
 ### Layout dos consumos
 
@@ -101,6 +104,18 @@ consumers:
   cada uma pela ordem meio, cima, baixo. Quanto maior o consumo, mais perto da casa. Os círculos
   mantêm o tamanho normal enquanto cabem nos 480 px (até 2 colunas); com mais colunas, encolhem
   primeiro as colunas dos consumos mais pequenos.
+
+### Consumos filhos
+
+Um aparelho com `parent` está pendurado noutro (por exemplo, o carregador EV no circuito do
+Piso 0). O valor da mãe já inclui o da filha, por isso a filha:
+
+- não entra no ranking nem ocupa lugar na grelha;
+- aparece como uma pastilha pequena agarrada à mãe, com linha e bolinhas, quando a mãe está
+  visível e a filha passa a sua potência mínima;
+- fica no primeiro lugar livre à volta da mãe, começando pelo lado oposto à casa.
+
+Só há um nível: a mãe não pode ser filha de outro aparelho.
 
 As potências aceitam `W`, `kW` e `MW` (lidas de `unit_of_measurement`).
 

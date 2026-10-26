@@ -97,12 +97,77 @@ export function consumerPath(slot: Slot, _index: number, _columns: number, _coun
     return `M${f(h.x + ux * h.r)},${f(h.y + uy * h.r)} L${f(x - ux * r)},${f(y - uy * r)}`;
   }
   // Further columns: run along a lane in the gap between rows, then turn into the slot.
-  const k = slot.col;
-  const row = y === ROWS.mid ? 'mid' : y < h.y ? 'top' : 'bottom';
-  const lane = row === 'top' ? 145 - 5 * (k - 1) : row === 'mid' ? 158 + 5 * (k - 1) : 268 + 5 * (k - 1);
-  const sy = row === 'bottom' ? h.y + 12 : h.y - 12;
-  const end = row === 'bottom' ? y - r : y < lane ? y + r : y - r;
+  const lane = laneY(slot);
+  const sy = y > h.y ? h.y + 12 : h.y - 12;
+  const end = y > h.y ? y - r : y < lane ? y + r : y - r;
   return `M${h.x + 32},${sy} C${h.x + 45},${lane} ${h.x + 60},${lane} ${h.x + 75},${lane} L${x - 15},${lane} Q${x},${lane} ${x},${end}`;
+}
+
+/** Height of the lane a path to a slot in the second or later column runs along. */
+function laneY(slot: Slot): number {
+  const k = slot.col ?? 0;
+  if (slot.y === ROWS.mid) return 158 + 5 * (k - 1);
+  return slot.y < NODES.home.y ? 145 - 5 * (k - 1) : 268 + 5 * (k - 1);
+}
+
+/** Rough polyline of a consumer path, for keeping satellites off it. */
+export function consumerRoute(slot: Slot): Pt[] {
+  const h = NODES.home;
+  if (slot.col === undefined || slot.col <= 0) return [h, slot];
+  const lane = laneY(slot);
+  return [h, { x: h.x + 75, y: lane }, { x: slot.x, y: lane }, slot];
+}
+
+export interface Rect { x0: number; y0: number; x1: number; y1: number }
+export interface Segment { x0: number; y0: number; x1: number; y1: number }
+export interface Obstacles { circles: Circle[]; rects: Rect[]; segments: Segment[] }
+
+const SATELLITE_GAP = 10;
+const MIN_CLEARANCE = 2;
+
+function segmentDistance(p: Pt, s: Segment): number {
+  const dx = s.x1 - s.x0;
+  const dy = s.y1 - s.y0;
+  const len2 = dx * dx + dy * dy;
+  const t = len2 ? Math.max(0, Math.min(1, ((p.x - s.x0) * dx + (p.y - s.y0) * dy) / len2)) : 0;
+  return Math.hypot(p.x - (s.x0 + t * dx), p.y - (s.y0 + t * dy));
+}
+
+function clearance(c: Circle, o: Obstacles, bounds: { width: number; height: number }): number {
+  let min = Math.min(c.x - c.r, bounds.width - c.x - c.r, c.y - c.r, bounds.height - c.y - c.r);
+  for (const b of o.circles) min = Math.min(min, Math.hypot(c.x - b.x, c.y - b.y) - b.r - c.r);
+  for (const b of o.rects) {
+    const dx = Math.max(b.x0 - c.x, 0, c.x - b.x1);
+    const dy = Math.max(b.y0 - c.y, 0, c.y - b.y1);
+    min = Math.min(min, Math.hypot(dx, dy) - c.r);
+  }
+  for (const s of o.segments) min = Math.min(min, segmentDistance(c, s) - c.r - 1);
+  return min;
+}
+
+/**
+ * A small circle of radius r hanging off parent. Tries every 15° starting from the side facing
+ * away from `away` (home) and takes the first spot that is clear of the obstacles; if none is,
+ * the one with the most room.
+ */
+export function placeSatellite(parent: Circle, r: number, obstacles: Obstacles, bounds: { width: number; height: number }, away: Pt): Circle {
+  const d = parent.r + SATELLITE_GAP + r;
+  const base = Math.atan2(parent.y - away.y, parent.x - away.x);
+  let best: Circle | undefined;
+  let bestClear = -Infinity;
+  for (let step = 0; step <= 12; step++) {
+    for (const sign of step === 0 ? [1] : [1, -1]) {
+      const a = base + (sign * step * Math.PI) / 12;
+      const c = { x: Math.round((parent.x + d * Math.cos(a)) * 10) / 10, y: Math.round((parent.y + d * Math.sin(a)) * 10) / 10, r };
+      const clear = clearance(c, obstacles, bounds);
+      if (clear >= MIN_CLEARANCE) return c;
+      if (clear > bestClear) {
+        best = c;
+        bestClear = clear;
+      }
+    }
+  }
+  return best!;
 }
 
 /** A centred row of small pills that shrinks to fit maxWidth. */

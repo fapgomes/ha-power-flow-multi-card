@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { columnLayout, consumerPath, consumerSlots, NODES, pillRow, viewBox } from '../src/layout';
+import { columnLayout, consumerPath, consumerSlots, NODES, pillRow, placeSatellite, viewBox } from '../src/layout';
 
 describe('consumerSlots', () => {
   it('normal mode up to 4', () => {
@@ -78,5 +78,40 @@ describe('consumerPath', () => {
         expect(d).not.toContain('undefined');
       });
     }
+  });
+});
+
+describe('placeSatellite', () => {
+  const parent = { x: 290, y: 95, r: 32 };
+  const bounds = { width: 480, height: 430 };
+
+  it('prefers the side facing away from home when it is free', () => {
+    const p = placeSatellite(parent, 12, { circles: [], rects: [], segments: [] }, bounds, NODES.home);
+    expect(p.r).toBe(12);
+    expect(p.x).toBeCloseTo(290, 0);
+    expect(p.y).toBeLessThan(parent.y - parent.r);
+    expect(Math.hypot(p.x - parent.x, p.y - parent.y)).toBeCloseTo(parent.r + 10 + 12, 0);
+  });
+
+  it('avoids circles, label boxes, lines and the card edges', () => {
+    const obstacles = {
+      circles: [{ x: 364, y: 95, r: 32 }],
+      rects: [{ x0: 270, y0: 40, x1: 310, y1: 62 }],
+      segments: [{ x0: 290, y0: 210, x1: 200, y1: 20 }],
+    };
+    const p = placeSatellite(parent, 12, obstacles, bounds, NODES.home);
+    const clear = (x: number, y: number, r: number) => Math.hypot(p.x - x, p.y - y) - r - p.r;
+    expect(clear(364, 95, 32)).toBeGreaterThanOrEqual(2);
+    expect(p.x + p.r < 270 || p.x - p.r > 310 || p.y + p.r < 40 || p.y - p.r > 62).toBe(true);
+    expect(p.y - p.r).toBeGreaterThanOrEqual(0);
+    expect(p.x - p.r).toBeGreaterThanOrEqual(0);
+  });
+
+  it('places several satellites without overlapping each other', () => {
+    const obstacles = { circles: [] as { x: number; y: number; r: number }[], rects: [], segments: [] };
+    const a = placeSatellite(parent, 12, obstacles, bounds, NODES.home);
+    obstacles.circles.push(a);
+    const b = placeSatellite(parent, 12, obstacles, bounds, NODES.home);
+    expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThanOrEqual(24);
   });
 });

@@ -34,6 +34,7 @@ const TEXT = {
     h_solar: 'Sum of the sources when empty', h_min_power: 'Consumers below this are hidden',
     h_sort: 'A consumer only overtakes another after beating it by this margin for this long',
     h_device_min: 'Overrides the global minimum power when set',
+    parent: 'Parent', h_parent: 'Shown as a small pill on the parent, whose value already includes this one',
   },
   pt: {
     grid: 'Rede', low_carbon: 'Low-carbon', home: 'Casa', solar: 'Solar', battery: 'Bateria', consumers: 'Consumos',
@@ -49,6 +50,7 @@ const TEXT = {
     h_solar: 'Se vazio, é a soma das fontes', h_min_power: 'Os consumos abaixo disto não aparecem',
     h_sort: 'Um consumo só ultrapassa outro se o superar por esta margem durante este tempo',
     h_device_min: 'Se preenchida, substitui a potência mínima global',
+    parent: 'Mãe', h_parent: 'Aparece como pastilha na mãe, cujo valor já inclui este',
   },
 };
 type Key = keyof typeof TEXT.en;
@@ -171,6 +173,12 @@ export class PowerFlowMultiCardEditor extends LitElement {
       { name: 'color', selector: { color_rgb: {} } },
       { name: 'min_power', selector: { number: { min: 0, mode: 'box', unit_of_measurement: 'W' } }, helper: 'h_device_min' },
     ];
+    // A child can hang from any other top-level device (one level only).
+    const withParent = (d: DeviceConfig): Schema[] => [...deviceSchema, {
+      name: 'parent',
+      selector: { entity: { include_entities: devices.filter((o) => o.entity && o.entity !== d.entity && !o.parent).map((o) => o.entity) } },
+      helper: 'h_parent',
+    }];
     const number = (min: number, max: number | undefined, unit: string) =>
       ({ number: { min, ...(max === undefined ? {} : { max }), mode: 'box', unit_of_measurement: unit } });
     const consumerSchema: Schema[] = [
@@ -205,7 +213,7 @@ export class PowerFlowMultiCardEditor extends LitElement {
       ${this.panel('consumers', 'mdi:power-plug', html`
         ${this.form('consumers', settings, consumerSchema, (v) => setConsumers(v, devices))}
         ${this.list<DeviceConfig>('devices', devices, (d) => this.name(d.entity, d.name),
-          (d, i) => this.form(`device-${i}`, deviceToForm(d), deviceSchema,
+          (d, i) => this.form(`device-${i}`, deviceToForm(d), withParent(d),
             (v) => setConsumers(settings, replaceItem(devices, i, deviceFromForm(v as DeviceForm)))),
           (list) => setConsumers(settings, list), () => ({ entity: '', color: PALETTE[devices.length % PALETTE.length] }))}`)}
     `;

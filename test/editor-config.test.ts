@@ -73,6 +73,11 @@ describe('device form', () => {
     expect(deviceFromForm({ entity: 'sensor.a', name: '' })).toEqual({ entity: 'sensor.a' });
   });
 
+  it('keeps the parent', () => {
+    expect(deviceToForm({ entity: 'sensor.b', parent: 'sensor.a' })).toEqual({ entity: 'sensor.b', parent: 'sensor.a' });
+    expect(deviceFromForm({ entity: 'sensor.b', parent: 'sensor.a' })).toEqual({ entity: 'sensor.b', parent: 'sensor.a' });
+  });
+
   it('keeps a per-device minimum power, including 0', () => {
     expect(deviceToForm({ entity: 'sensor.a', min_power: 0 })).toEqual({ entity: 'sensor.a', min_power: 0 });
     expect(deviceFromForm({ entity: 'sensor.a', min_power: 0 })).toEqual({ entity: 'sensor.a', min_power: 0 });

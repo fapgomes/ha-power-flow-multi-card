@@ -92,6 +92,14 @@ describe('editor', () => {
     expect(last(changes).consumers!.devices.map((d) => d.name)).toEqual(['B', 'A']);
   });
 
+  it('offers only other top-level devices as parent', async () => {
+    const cfg = structuredClone(base);
+    cfg.consumers!.devices.push({ entity: 'sensor.c', parent: 'sensor.a' });
+    const { el } = await mount(cfg);
+    const schema = (form(el, 'device-1') as any).schema as { name: string; selector: any }[];
+    expect(schema.find((s) => s.name === 'parent')!.selector.entity.include_entities).toEqual(['sensor.a']);
+  });
+
   it('keeps consumer settings and drops cleared ones', async () => {
     const { el, changes } = await mount(base);
     change(el, 'consumers', { columns: 3, min_power: 0 });

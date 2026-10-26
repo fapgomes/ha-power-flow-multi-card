@@ -118,3 +118,26 @@ describe('config validation', () => {
       .toThrow('consumers.devices[0].entity is required');
   });
 });
+
+describe('consumer parents', () => {
+  const cfg = (devices: { entity: string; parent?: string }[]) =>
+    ({ type: 't', grid: { entity: 'sensor.g' }, consumers: { devices } }) as any;
+
+  it('accepts a parent that is another top-level device', () => {
+    expect(() => normalizeConfig(cfg([{ entity: 'sensor.a' }, { entity: 'sensor.b', parent: 'sensor.a' }]))).not.toThrow();
+  });
+
+  it('rejects unknown, self and nested parents', () => {
+    expect(() => normalizeConfig(cfg([{ entity: 'sensor.b', parent: 'sensor.x' }]))).toThrow('consumers.devices[0].parent');
+    expect(() => normalizeConfig(cfg([{ entity: 'sensor.b', parent: 'sensor.b' }]))).toThrow('consumers.devices[0].parent');
+    expect(() => normalizeConfig(cfg([{ entity: 'sensor.a' }, { entity: 'sensor.b', parent: 'sensor.a' }, { entity: 'sensor.c', parent: 'sensor.b' }])))
+      .toThrow('consumers.devices[2].parent');
+  });
+
+  it('passes the parent through readState', () => {
+    const c = normalizeConfig(cfg([{ entity: 'sensor.a' }, { entity: 'sensor.b', parent: 'sensor.a' }]));
+    const r = readState({ states: {} }, c);
+    expect(r.consumers.map((x) => x.parent)).toEqual([undefined, 'sensor.a']);
+  });
+});
+

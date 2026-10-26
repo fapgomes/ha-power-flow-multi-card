@@ -76,14 +76,14 @@ export function bankFromForm(f: BankForm): BankConfig {
   return { power, soc: f.soc ?? '', ...compact({ name: f.name, capacity: f.capacity, invert: f.invert }) };
 }
 
-export interface DeviceForm { entity?: string; name?: string; icon?: string; color?: Rgb; min_power?: number }
+export interface DeviceForm { entity?: string; name?: string; icon?: string; color?: Rgb; min_power?: number; parent?: string }
 
 export function deviceToForm(d: DeviceConfig): DeviceForm {
-  return compact({ entity: d.entity, name: d.name, color: hexToRgb(d.color), icon: d.icon, min_power: d.min_power }) as DeviceForm;
+  return compact({ entity: d.entity, name: d.name, color: hexToRgb(d.color), icon: d.icon, min_power: d.min_power, parent: d.parent }) as DeviceForm;
 }
 
 export function deviceFromForm(f: DeviceForm): DeviceConfig {
-  return { entity: f.entity ?? '', ...compact({ name: f.name, color: rgbToHex(f.color), icon: f.icon, min_power: f.min_power }) };
+  return { entity: f.entity ?? '', ...compact({ name: f.name, color: rgbToHex(f.color), icon: f.icon, min_power: f.min_power, parent: f.parent }) };
 }
 
 /** Returns a copy of the config with one top-level section replaced, or removed when undefined. */

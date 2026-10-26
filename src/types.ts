@@ -3,7 +3,7 @@ export type BankPower = string | { charge: string; discharge: string };
 
 export interface SolarSourceConfig { entity: string; name?: string; icon?: string }
 export interface BankConfig { power: BankPower; soc: string; name?: string; capacity?: number; invert?: boolean }
-export interface DeviceConfig { entity: string; name?: string; color?: string; icon?: string; min_power?: number }
+export interface DeviceConfig { entity: string; name?: string; color?: string; icon?: string; min_power?: number; parent?: string }
 
 export interface ConsumersConfig {
   columns?: number;
@@ -38,5 +38,5 @@ export interface Readings {
   batteryNet: number | null;
   batterySoc: number | null;
   homeEntityW: number | null;
-  consumers: { id: string; entity: string; name: string; color: string; icon?: string; w: number | null }[];
+  consumers: { id: string; entity: string; name: string; color: string; icon?: string; w: number | null; parent?: string }[];
 }
