@@ -352,8 +352,8 @@ export class PowerFlowMultiCard extends LitElement {
     const gridEntity = typeof cfg.grid.entity === 'string' ? cfg.grid.entity : cfg.grid.entity.consumption;
     const gridName = nameMode(cfg.grid);
     nodes.push(this.node('grid', gridEntity, grid, COLORS.gridImport, [
-      { text: `← ${fmt(r.gridExport)}`, color: COLORS.gridExport },
-      { text: `→ ${fmt(r.gridImport)}`, color: COLORS.gridImport },
+      { text: `${g.gridArrows.export} ${fmt(r.gridExport)}`, color: COLORS.gridExport },
+      { text: `${g.gridArrows.import} ${fmt(r.gridImport)}`, color: COLORS.gridImport },
       ...(gridName === 'inside' ? [nameLine('Grid', 9)] : []),
     ], {
       label: gridName === 'outside' ? 'Grid' : undefined, labelBelow: true, labelAt: g.labels.grid, icon: 'mdi:transmission-tower',
@@ -373,8 +373,9 @@ export class PowerFlowMultiCard extends LitElement {
       const net = r.batteryNet;
       nodes.push(this.node('battery', r.banks[0]?.entity, battery, COLORS.batteryDischarge, [
         { text: r.batterySoc === null ? DASH : `${Math.round(r.batterySoc)}%` },
-        { text: `↓ ${net === null ? DASH : formatPower(Math.max(net, 0))}`, color: COLORS.batteryDischarge },
-        { text: `↑ ${net === null ? DASH : formatPower(Math.max(-net, 0))}`, color: COLORS.batteryCharge },
+        // As in power-flow-card-plus: ↑ energy leaving the battery (discharge), ↓ entering it (charge).
+        { text: `↑ ${net === null ? DASH : formatPower(Math.max(net, 0))}`, color: COLORS.batteryDischarge },
+        { text: `↓ ${net === null ? DASH : formatPower(Math.max(-net, 0))}`, color: COLORS.batteryCharge },
         ...(batteryName === 'inside' ? [nameLine('Battery', 9)] : []),
       ], {
         title: 'Battery', fontSize: 11, strokeWidth: 2.5, icon: batteryIcon(r.batterySoc), iconColor: 'var(--primary-text-color)',

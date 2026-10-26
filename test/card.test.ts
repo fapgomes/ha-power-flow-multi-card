@@ -227,6 +227,26 @@ describe('power-flow-multi-card', () => {
     }
   });
 
+  it('points the grid arrows the way the energy goes in each layout', async () => {
+    const gridTexts = async (layout?: 'vertical') => {
+      document.body.innerHTML = '';
+      const el = await mount({ ...full, layout }, fullStates);
+      return q(el, '[data-node="grid"] text.value').map((t) => t.textContent!.trim()).slice(0, 2);
+    };
+    expect(await gridTexts()).toEqual(['← 0 W', '→ 320 W']);
+    expect(await gridTexts('vertical')).toEqual(['↑ 0 W', '↓ 320 W']);
+  });
+
+  it('marks discharge with an up arrow and charge with a down arrow', async () => {
+    const texts = async (b1: string, b2: string) => {
+      document.body.innerHTML = '';
+      const el = await mount(full, { ...fullStates, 'sensor.b1': b1, 'sensor.b2': b2 });
+      return q(el, '[data-node="battery"] text.value').map((t) => t.textContent!.trim());
+    };
+    expect(await texts('-320', '-290')).toEqual(expect.arrayContaining(['↑ 0 W', '↓ 610 W']));
+    expect(await texts('500', '317')).toEqual(expect.arrayContaining(['↑ 817 W', '↓ 0 W']));
+  });
+
   it('shows the battery SoC above an icon that follows the charge, with the flows below', async () => {
     const el = await mount(full, fullStates);
     const b = q(el, '[data-node="battery"]')[0];

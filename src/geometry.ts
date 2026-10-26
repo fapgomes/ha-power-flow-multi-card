@@ -26,6 +26,8 @@ export interface Geometry {
   fixedRoutes: Pt[][];
   /** Names drawn outside their circle: "Solar" and "Battery" when not inside, and "Grid". */
   labels: { solar: Label; battery: Label; grid?: Label };
+  /** Arrows on the grid circle pointing the way energy goes: towards home (import) and back (export). */
+  gridArrows: { import: string; export: string };
 }
 
 const r1 = (v: number) => Math.round(v * 10) / 10;
@@ -98,6 +100,7 @@ const horizontal: Geometry = (() => {
       solar: { x: n.solar.x + n.solar.r * 0.84, y: n.solar.y - n.solar.r * 0.69, anchor: 'start' },
       battery: { x: n.battery.x + n.battery.r * 0.84, y: n.battery.y + n.battery.r * 0.95, anchor: 'start' },
     },
+    gridArrows: { import: '→', export: '←' },
   };
 })();
 
@@ -185,6 +188,7 @@ const vertical: Geometry = (() => {
       battery: { x: n.battery.x, y: n.battery.y - n.battery.r - 8, anchor: 'middle' },
       grid: { x: n.grid.x - n.grid.r - 6, y: n.grid.y + 4, anchor: 'end' },
     },
+    gridArrows: { import: '↓', export: '↑' },
   };
 })();
 
