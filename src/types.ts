@@ -27,7 +27,7 @@ export interface CardConfig {
   /** All text in bold (default false). */
   bold?: boolean;
   grid: { entity: PowerEntity; invert?: boolean; show_name?: boolean; name_inside?: boolean };
-  low_carbon?: { entity: string };
+  low_carbon?: { entity: string; show_name?: boolean; name_inside?: boolean };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };
   battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean };
   /** show_consumers: inner ring with the visible consumers' shares of home (default true). */

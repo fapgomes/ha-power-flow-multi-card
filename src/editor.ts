@@ -246,8 +246,13 @@ export class PowerFlowMultiCardEditor extends LitElement {
         ${this.form('grid', grid, gridSchema, (v) => setGrid(gridFromForm(v as GridForm)), { entity: 'grid_entity' })}
         ${this.form('grid-name', { show_name: cfg.grid?.show_name !== false, name_inside: cfg.grid?.name_inside !== false }, nameOptions,
           (v) => setGrid({ ...(this.config ?? cfg).grid, show_name: v.show_name as boolean, name_inside: v.name_inside as boolean }), nameLabels)}
-        ${this.form('low_carbon', compact({ entity: cfg.low_carbon?.entity }), [{ name: 'entity', selector: sensor }],
-          (v) => this.emit(withSection(cfg, 'low_carbon', v.entity ? { entity: v.entity } : undefined)), { entity: 'fossil' })}`)}
+        ${this.form('low_carbon', {
+          ...compact({ entity: cfg.low_carbon?.entity }),
+          show_name: cfg.low_carbon?.show_name !== false, name_inside: cfg.low_carbon?.name_inside !== false,
+        }, [{ name: 'entity', selector: sensor }, ...nameOptions],
+          (v) => this.emit(withSection(this.config ?? cfg, 'low_carbon', v.entity
+            ? { entity: v.entity as string, ...offOnly({ show_name: v.show_name as boolean | undefined, name_inside: v.name_inside as boolean | undefined }) }
+            : undefined)), { entity: 'fossil', ...nameLabels })}`)}
 
       ${this.panel('solar', 'mdi:solar-power', html`
         ${this.form('solar', {

@@ -42,6 +42,8 @@ let instanceCounter = 0;
 interface Line { text: string; color?: string; size?: number }
 
 const NAME_COLOR = 'var(--secondary-text-color)';
+/** Room kept above the topmost circle or name. */
+const TOP_MARGIN = 6;
 /** Width (viewBox units) a name may take inside a full-size consumer circle; longer names get a smaller font. */
 const CONSUMER_NAME_WIDTH = 50;
 /** A name written inside its circle, under the value. */
@@ -349,8 +351,14 @@ export class PowerFlowMultiCard extends LitElement {
 
     const nodes: SVGTemplateResult[] = [];
     if (hasLowCarbon) {
-      nodes.push(this.node('low-carbon', cfg.low_carbon!.entity, lowCarbon, COLORS.lowCarbon,
-        [{ text: r.fossilPct === null ? DASH : formatPower(f.lowCarbon) }], { label: 'Low-carbon', icon: 'mdi:leaf', fontSize: 11, strokeWidth: 2.5 }));
+      const lowCarbonName = nameMode(cfg.low_carbon);
+      nodes.push(this.node('low-carbon', cfg.low_carbon!.entity, lowCarbon, COLORS.lowCarbon, [
+        { text: r.fossilPct === null ? DASH : formatPower(f.lowCarbon) },
+        ...(lowCarbonName === 'inside' ? [nameLine('Low-carbon', 8)] : []),
+      ], {
+        label: lowCarbonName === 'outside' ? 'Low-carbon' : undefined, icon: 'mdi:leaf', fontSize: 11, strokeWidth: 2.5,
+        iconScale: lowCarbonName === 'inside' ? 0.4 : undefined,
+      }));
     }
     const gridEntity = typeof cfg.grid.entity === 'string' ? cfg.grid.entity : cfg.grid.entity.consumption;
     const gridName = nameMode(cfg.grid);
@@ -418,8 +426,16 @@ export class PowerFlowMultiCard extends LitElement {
     const homeLayout = PowerFlowMultiCard.iconLayout(home, [], [13], 0.5);
     this.childPills(g, cfg, children, visible, slots, vb, { solarPills, bankPills, hasSolar, hasBattery, hasLowCarbon, solarName, batteryName }, paths, nodes, fmt);
 
+    // Trim the empty band above the topmost circle or name, e.g. when no name sits above the drawing.
+    // Solar pills count even while hidden, so the card does not change size as solar goes idle.
+    const topmost = [grid, home, ...(hasLowCarbon ? [lowCarbon] : []), ...(hasSolar ? [solar, ...g.solarPills(r.solarSources.length)] : []),
+      ...(hasBattery ? [battery, ...bankPills] : [])].map((c) => c.y - c.r);
+    if (hasSolar && solarName === 'outside') topmost.push(labelRect(g.labels.solar, 5).y0);
+    if (hasBattery && batteryName === 'outside') topmost.push(labelRect(g.labels.battery, 7).y0);
+    const top = Math.max(0, Math.floor(Math.min(...topmost, ...this.labelRects.map((l) => l.y0)) - TOP_MARGIN));
+
     return html`<ha-card>
-      <svg viewBox="0 0 ${vb.width} ${vb.height}" xmlns="http://www.w3.org/2000/svg" class=${cfg.bold ? 'bold' : ''}>
+      <svg viewBox="0 ${top} ${vb.width} ${vb.height - top}" xmlns="http://www.w3.org/2000/svg" class=${cfg.bold ? 'bold' : ''}>
         ${hasSolar && solarName === 'outside' ? this.outsideLabel(g.labels.solar, 'Solar') : nothing}
         ${hasBattery && batteryName === 'outside' ? this.outsideLabel(g.labels.battery, 'Battery') : nothing}
         ${paths}

@@ -100,6 +100,8 @@ describe('editor', () => {
     const { el, changes } = await mount(base);
     change(el, 'low_carbon', { entity: 'sensor.fossil' });
     expect(last(changes).low_carbon).toEqual({ entity: 'sensor.fossil' });
+    change(el, 'low_carbon', { entity: 'sensor.fossil', show_name: true, name_inside: false });
+    expect(last(changes).low_carbon).toEqual({ entity: 'sensor.fossil', name_inside: false });
     change(el, 'low_carbon', {});
     expect(last(changes)).not.toHaveProperty('low_carbon');
   });

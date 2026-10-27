@@ -91,6 +91,8 @@ consumers:
 | `grid.show_name` | `true` | Shows the "Grid" name; `false` hides it |
 | `grid.name_inside` | `true` | Writes "Grid" inside the circle; `false` puts it outside |
 | `low_carbon.entity` | — | Grid fossil fuel percentage; low-carbon = import × (1 − %) |
+| `low_carbon.show_name` | `true` | Shows the "Low-carbon" name; `false` hides it |
+| `low_carbon.name_inside` | `true` | Writes "Low-carbon" inside the circle; `false` puts it outside |
 | `solar.entity` | sum of the sources | Total solar production |
 | `solar.sources[]` | — | `entity`, `name`, `icon` per source |
 | `solar.show_name` | `true` | Shows the "Solar" name; `false` hides it |

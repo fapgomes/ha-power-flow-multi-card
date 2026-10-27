@@ -94,7 +94,7 @@ describe('power-flow-multi-card', () => {
     const consumers = q(el, '[data-node="consumer"] circle').map((c) => Number(c.getAttribute('cy')));
     expect(consumers).toHaveLength(6);
     expect(consumers.every((y) => y > home.y)).toBe(true);
-    expect(el.shadowRoot!.querySelector('svg')!.getAttribute('viewBox')).toMatch(/^0 0 376 /);
+    expect(el.shadowRoot!.querySelector('svg')!.getAttribute('viewBox')).toMatch(/^0 \d+ 376 /);
     expect(q(el, '[data-node="grid"] text.value').map((t) => t.textContent!.trim())).toContain('Grid');
   });
 
@@ -161,6 +161,44 @@ describe('power-flow-multi-card', () => {
     expect(await gridTexts({ entity: 'sensor.grid' })).toEqual({ inside: true, outside: false });
     expect(await gridTexts({ entity: 'sensor.grid', name_inside: false })).toEqual({ inside: false, outside: true });
     expect(await gridTexts({ entity: 'sensor.grid', show_name: false })).toEqual({ inside: false, outside: false });
+  });
+
+  it('writes Low-carbon inside its circle by default, outside or not at all by option', async () => {
+    const texts = async (low_carbon: CardConfig['low_carbon']) => {
+      document.body.innerHTML = '';
+      const el = await mount({ ...full, low_carbon }, fullStates);
+      return {
+        inside: q(el, '[data-node="low-carbon"] text.value').map((t) => t.textContent!.trim()).includes('Low-carbon'),
+        outside: q(el, 'text.label').map((t) => t.textContent).includes('Low-carbon'),
+      };
+    };
+    expect(await texts({ entity: 'sensor.fossil' })).toEqual({ inside: true, outside: false });
+    expect(await texts({ entity: 'sensor.fossil', name_inside: false })).toEqual({ inside: false, outside: true });
+    expect(await texts({ entity: 'sensor.fossil', show_name: false })).toEqual({ inside: false, outside: false });
+  });
+
+  it('trims the empty space above the drawing when no name sits above it', async () => {
+    const top = async (config: CardConfig) => {
+      document.body.innerHTML = '';
+      const el = await mount(config, fullStates);
+      const [x, y, w, h] = el.shadowRoot!.querySelector('svg')!.getAttribute('viewBox')!.split(' ').map(Number);
+      return { x, y, w, bottom: y + h };
+    };
+    const vertical = { ...full, layout: 'vertical' as const };
+    const inside = await top(vertical);
+    const outside = await top({ ...vertical, low_carbon: { entity: 'sensor.fossil', name_inside: false } });
+    expect(inside.x).toBe(0);
+    expect(inside.y).toBeGreaterThan(outside.y);
+    expect(inside.y).toBeGreaterThanOrEqual(15);
+    // Only the top is trimmed.
+    expect(inside.bottom).toBe(outside.bottom);
+    // Grid and low-carbon still fit.
+    for (const kind of ['grid', 'low-carbon']) {
+      document.body.innerHTML = '';
+      const el = await mount(vertical, fullStates);
+      const c = el.shadowRoot!.querySelector(`[data-node="${kind}"] circle`)!;
+      expect(Number(c.getAttribute('cy')) - Number(c.getAttribute('r'))).toBeGreaterThan(inside.y);
+    }
   });
 
   it('puts names outside when name_inside is false', async () => {
