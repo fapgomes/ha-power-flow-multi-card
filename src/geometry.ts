@@ -105,32 +105,38 @@ const horizontal: Geometry = (() => {
 })();
 
 /**
- * Vertical: grid on top, home below it, solar left and battery right, consumers in rows of three
- * under home. It is drawn narrower than the horizontal layout with the same radii, so at the same
- * card width every circle and text comes out about 28 % bigger.
+ * Vertical: grid on top, home below it, solar left and battery right, consumers in three columns
+ * under home. The middle column starts just below home; the outer columns start higher, beside
+ * home, so each row is staggered and the rows pack closer than a plain grid. It is drawn narrower
+ * than the horizontal layout with the same radii, so at the same card width every circle and text
+ * comes out about 28 % bigger.
  */
 const VERTICAL_WIDTH = 376;
 const V_COLUMNS = 3;
 const V_ROWS = 4;
 const V_R = 32;
 const V_COL_STEP = 118;
-const V_FIRST_ROW = 436;
+/** y of the first middle consumer (below home) and of the first outer ones (beside home). */
+const V_MIDDLE_FIRST = 376;
+const V_OUTER_FIRST = 296;
+/** The card keeps the height of this many consumers, so it does not jump as consumers come and go. */
+const V_FIXED_COUNT = 8;
 
 const vertical: Geometry = (() => {
   const cx = VERTICAL_WIDTH / 2;
   const n = {
     grid: { x: cx, y: 62, r: 38 },
     lowCarbon: { x: cx + 118, y: 62, r: 34 },
-    solar: { x: cx - 124, y: 184, r: 38 },
-    battery: { x: cx + 124, y: 184, r: 38 },
-    home: { x: cx, y: 306, r: 42 },
+    solar: { x: cx - 124, y: 172, r: 38 },
+    battery: { x: cx + 124, y: 172, r: 38 },
+    home: { x: cx, y: 284, r: 42 },
   };
   const centre = { x: cx, y: n.solar.y };
   // Along the axis is right (solar left, battery right); across is down (grid above, home below).
   const cross = crossFlows((along, across) => ({ x: centre.x + along, y: centre.y + across }), n,
     n.grid.y + n.grid.r - centre.y, n.home.y - n.home.r - centre.y);
   const xs = [cx, cx - V_COL_STEP, cx + V_COL_STEP];
-  const rowStep = (outside: boolean) => (outside ? 94 : 82);
+  const rowStep = (outside: boolean) => (outside ? 82 : 70);
   /**
    * x of the gap a path runs down to reach a slot below the first row. The left and right
    * columns use the gap on their side; the middle column alternates, so both gaps carry about
@@ -145,39 +151,52 @@ const vertical: Geometry = (() => {
     return k % 2 === 0 ? gapRight - 2 - 3 * (k / 2) : gapLeft + 2 + 3 * ((k - 1) / 2);
   };
   const homeBottom = (x: number): Pt => ({ x, y: r1(n.home.y + Math.sqrt(n.home.r ** 2 - (x - n.home.x) ** 2)) });
+  /** Where a path from a lane enters a slot: its upper edge on the lane's side. */
+  const entry = (s: Slot, lx: number) => edge(s, lx - s.x, -40);
+  const slots = (count: number, outside: boolean): Slot[] =>
+    Array.from({ length: Math.max(0, Math.min(count, V_COLUMNS * V_ROWS)) }, (_, i) => {
+      const row = Math.floor(i / V_COLUMNS);
+      // Closest to home first: the middle one in the first row, the outer ones in the rest.
+      const col = row === 0 ? i % V_COLUMNS : [1, 2, 0][i % V_COLUMNS];
+      const y = (col === 0 ? V_MIDDLE_FIRST : V_OUTER_FIRST) + row * rowStep(outside);
+      return { x: xs[col], y, r: V_R, labelBelow: true, row };
+    });
   return {
     nodes: n,
     capacity: () => V_COLUMNS * V_ROWS,
     viewBox: (count, _columns, outside) => {
-      const rows = Math.max(1, Math.ceil(Math.min(count, V_COLUMNS * V_ROWS) / V_COLUMNS));
-      return { width: VERTICAL_WIDTH, height: V_FIRST_ROW + (rows - 1) * rowStep(outside) + V_R + (outside ? 18 : 8) };
+      const bottom = Math.max(n.home.y + n.home.r, ...slots(Math.max(count, V_FIXED_COUNT), outside).map((s) => s.y + s.r));
+      return { width: VERTICAL_WIDTH, height: bottom + (outside ? 18 : 8) };
     },
-    slots: (count, _columns, outside) => Array.from({ length: Math.max(0, Math.min(count, V_COLUMNS * V_ROWS)) }, (_, i) => {
-      const row = Math.floor(i / V_COLUMNS);
-      return { x: xs[i % V_COLUMNS], y: V_FIRST_ROW + row * rowStep(outside), r: V_R, labelBelow: true, row };
-    }),
+    slots: (count, _columns, outside) => slots(count, outside),
     consumerPath: (s) => {
       const h = n.home;
-      const top = s.y - s.r;
       if (!s.row) {
-        if (s.x === h.x) return `M${h.x},${h.y + h.r} L${s.x},${top}`;
+        if (s.x === h.x) return `M${h.x},${h.y + h.r} L${s.x},${s.y - s.r}`;
         const a = edge(h, s.x - h.x, s.y - h.y);
-        return `M${a.x},${a.y} C${r1(a.x + (s.x - h.x) * 0.25)},${a.y + 16} ${s.x},${top - 24} ${s.x},${top}`;
+        const b = edge(s, h.x - s.x, h.y - s.y);
+        return `M${a.x},${a.y} L${b.x},${b.y}`;
       }
       const lx = laneX(s);
       // Spread the starts along home's bottom edge, in the order of the lanes.
       const a = homeBottom(r1(h.x + (lx - h.x) * 0.3));
-      return `M${a.x},${a.y} C${a.x},${a.y + 25} ${lx},${V_FIRST_ROW - 50} ${lx},${V_FIRST_ROW - 10}`
-        + ` L${lx},${top - 26} C${lx},${top - 8} ${s.x},${top - 18} ${s.x},${top}`;
+      const e = entry(s, lx);
+      const laneTop = a.y + 32;
+      const laneEnd = e.y - 22;
+      if (laneEnd <= laneTop) return `M${a.x},${a.y} C${a.x},${a.y + 18} ${lx},${r1(e.y - 14)} ${e.x},${e.y}`;
+      return `M${a.x},${a.y} C${a.x},${a.y + 18} ${lx},${a.y + 12} ${lx},${laneTop}`
+        + ` L${lx},${laneEnd} Q${lx},${r1(e.y - 6)} ${e.x},${e.y}`;
     },
     consumerRoute: (s) => {
       if (!s.row) return [n.home, s];
       const lx = laneX(s);
-      return [n.home, { x: lx, y: V_FIRST_ROW - 10 }, { x: lx, y: s.y - s.r - 26 }, s];
+      const a = homeBottom(r1(n.home.x + (lx - n.home.x) * 0.3));
+      const e = entry(s, lx);
+      return [n.home, a, { x: lx, y: Math.min(a.y + 32, e.y) }, { x: lx, y: e.y }, s];
     },
     // Solar is at the left edge, so its sources sit in a narrower row above it.
     solarPills: (k) => pillRow(k, n.solar.x, n.solar.y - n.solar.r - 46, 110),
-    bankPills: (k) => pillRow(k, n.battery.x, n.battery.y + n.battery.r + 30, 110),
+    bankPills: (k) => pillRow(k, n.battery.x, n.battery.y + n.battery.r + 28, 110),
     flows: {
       ...cross.flows,
       lowCarbonGrid: `M${n.lowCarbon.x - n.lowCarbon.r},${n.lowCarbon.y} L${n.grid.x + n.grid.r},${n.grid.y}`,

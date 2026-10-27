@@ -29,22 +29,45 @@ describe('vertical geometry', () => {
     expect(g.viewBox(6, 2, false).width).toBeLessThan(geometryFor('horizontal').viewBox(6, 2, false).width);
   });
 
-  it('lays consumers out 3 per row below home, the biggest straight below it', () => {
+  it('lays consumers out in three staggered columns: middle below home, outer ones beside it', () => {
     const s = g.slots(7, 2, false);
     expect(s).toHaveLength(7);
     expect(s.every((x) => x.r === 32)).toBe(true);
     expect(s[0].x).toBe(home.x);
-    expect(s.every((x) => x.y - x.r > home.y + home.r)).toBe(true);
-    expect(new Set(s.slice(0, 3).map((x) => x.y)).size).toBe(1);
-    expect(s[3].y).toBeGreaterThan(s[0].y);
+    expect(s[0].y - s[0].r).toBeGreaterThan(home.y + home.r);
+    // The outer columns start beside home, clear of it and of solar, battery and the bank pills.
+    for (const x of [s[1], s[2]]) {
+      expect(x.y).toBeLessThan(s[0].y);
+      expect(Math.hypot(x.x - home.x, x.y - home.y)).toBeGreaterThan(x.r + home.r);
+      expect(x.y - x.r).toBeGreaterThan(solar.y + solar.r + 40);
+    }
+    for (const p of g.bankPills(2)) expect(Math.hypot(s[2].x - p.x, s[2].y - p.y)).toBeGreaterThan(s[2].r + p.r + 8);
+    expect(s[1].y).toBe(s[2].y);
+    // From the second row on, the outer slots are closer to home than the middle one, so they fill first.
+    expect(s[3].x).toBeLessThan(home.x);
+    expect(s[4].x).toBeGreaterThan(home.x);
+    expect(s[3].y).toBeGreaterThan(s[1].y);
+    expect(s[5].y).toBeGreaterThan(s[0].y);
     expect(s[6].y).toBeGreaterThan(s[3].y);
+    const d = (x: Circle) => Math.hypot(x.x - home.x, x.y - home.y);
+    for (let i = 1; i < s.length; i++) expect(d(s[i])).toBeGreaterThanOrEqual(d(s[i - 1]) - 0.01);
+    // Circles in the same column do not touch.
+    s.forEach((a, i) => s.forEach((b, j) => {
+      if (i < j) expect(Math.hypot(a.x - b.x, a.y - b.y)).toBeGreaterThan(a.r + b.r + 4);
+    }));
     expect(g.slots(20, 2, false)).toHaveLength(g.capacity(2));
   });
 
-  it('grows taller with each row and keeps every circle inside', () => {
-    const h3 = g.viewBox(3, 2, false).height;
-    const h6 = g.viewBox(6, 2, false).height;
-    expect(h6).toBeGreaterThan(h3);
+  it('keeps the height of 8 consumers up to 8, and only grows from the 9th', () => {
+    const h8 = g.viewBox(8, 2, false).height;
+    expect(h8).toBeLessThanOrEqual(500);
+    for (const k of [0, 1, 3, 6, 7]) expect(g.viewBox(k, 2, false).height).toBe(h8);
+    expect(g.viewBox(9, 2, false).height).toBeGreaterThan(h8);
+    expect(g.viewBox(9, 2, false).height).toBeLessThanOrEqual(560);
+  });
+
+  it('grows taller with each row past 8 and keeps every circle inside', () => {
+    expect(g.viewBox(12, 2, false).height).toBeGreaterThan(g.viewBox(9, 2, false).height);
     const vb = g.viewBox(9, 2, true);
     for (const x of g.slots(9, 2, true)) {
       expect(x.x - x.r).toBeGreaterThanOrEqual(0);

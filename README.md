@@ -123,10 +123,11 @@ consumers:
 ### Vertical layout
 
 With `layout: vertical` the same cross of flows is turned on its side: grid on top, home below it,
-solar on the left and battery on the right. Consumers go in rows of three under home, the biggest
-straight below it; paths to the lower rows run down the gaps between the circles. The drawing is
-narrower, so at the same card width every circle and text is about 28 % bigger; the card is taller
-and grows by one row for every three consumers (up to 12).
+solar on the left and battery on the right. Consumers go in three staggered columns: the biggest
+straight below home, the next two beside it, and the rest below them, closest to home first; paths
+to the lower circles run down the gaps between the columns. The drawing is narrower, so at the same
+card width every circle and text is about 28 % bigger. The card keeps the same height for up to 8
+consumers, so it does not jump as consumers come and go, and only grows from the 9th (up to 12).
 
 ### Child consumers
 

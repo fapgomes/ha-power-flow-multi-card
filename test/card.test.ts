@@ -93,7 +93,7 @@ describe('power-flow-multi-card', () => {
     expect(solar.x).toBeLessThan(battery.x);
     const consumers = q(el, '[data-node="consumer"] circle').map((c) => Number(c.getAttribute('cy')));
     expect(consumers).toHaveLength(6);
-    expect(consumers.every((y) => y > home.y + home.r)).toBe(true);
+    expect(consumers.every((y) => y > home.y)).toBe(true);
     expect(el.shadowRoot!.querySelector('svg')!.getAttribute('viewBox')).toMatch(/^0 0 376 /);
     expect(q(el, '[data-node="grid"] text.value').map((t) => t.textContent!.trim())).toContain('Grid');
   });
