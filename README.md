@@ -8,16 +8,28 @@ Lovelace card for Home Assistant inspired by
 - **many consumers**: only the biggest ones are shown, in a grid with a configurable number of
   columns, each with its own colour, and with a stable order (they don't "dance" around);
 - **child consumers**: a device that is part of another one (e.g. an EV charger on a floor
-  circuit) is drawn as a small pill attached to its parent.
+  circuit) is drawn as a small pill attached to its parent;
+- **two layouts**: horizontal, as in the original, or vertical, which renders everything bigger in a
+  narrow column;
+- **names inside the circles**, inner rings with each consumer's share of home and each child's
+  share of its parent, and optional bold text.
+
+| Horizontal | Vertical |
+|---|---|
+| ![Horizontal layout](images/horizontal.png) | ![Vertical layout](images/vertical.png) |
 
 Flows between grid, solar, battery and home are computed from the totals. The card never
 attributes flows to an individual panel or bank.
 
 ## Installation
 
-**HACS (custom repository):** HACS → ⋮ → Custom repositories → this repository's URL, category
-*Dashboard*. HACS downloads `power-flow-multi-card.js` from the GitHub release assets, so every
-release has the built file attached.
+**HACS:**
+
+[![Open your Home Assistant instance and open this repository in HACS.](https://my.home-assistant.io/badges/hacs_repository.svg)](https://my.home-assistant.io/redirect/hacs_repository/?owner=fapgomes&repository=ha-power-flow-multi-card&category=plugin)
+
+Or by hand: HACS → ⋮ → Custom repositories → this repository's URL, category *Dashboard*. HACS
+downloads `power-flow-multi-card.js` from the GitHub release assets, so every release has the
+built file attached.
 
 **Manual:**
 
@@ -34,14 +46,18 @@ written in YAML:
 
 ```yaml
 type: custom:power-flow-multi-card
+layout: vertical                     # or horizontal (default)
+bold: true
 grid:
   entity: sensor.grid_power          # + import, − export
   # or: entity: { consumption: sensor.grid_import, production: sensor.grid_export }
   invert: false
 low_carbon:
   entity: sensor.grid_fossil_fuel_percentage
+  show_name: false                   # hides "Low-carbon"
 solar:
   entity: sensor.pv_total            # optional; defaults to the sum of the sources
+  name_inside: false                 # writes "Solar" outside the circle
   sources:
     - entity: sensor.pv_roof_south
       name: Roof S
@@ -66,6 +82,7 @@ consumers:
   min_power: 5
   sort_margin: 10
   sort_hold: 30
+  show_percent: true
   devices:
     - entity: sensor.ground_floor_power
       name: Ground floor
@@ -84,7 +101,7 @@ consumers:
 
 | Option | Default | Description |
 |---|---|---|
-| `layout` | `horizontal` | `horizontal`: consumers to the right of home; `vertical`: grid on top, consumers in rows below home (see below) |
+| `layout` | `horizontal` | `horizontal`: consumers to the right of home; `vertical`: grid on top, consumers in three columns below home (see below) |
 | `bold` | `false` | Makes all text in the card bold |
 | `grid.entity` | required | Signed entity (+ import) or `{consumption, production}` |
 | `grid.invert` | `false` | Inverts the grid sign |
@@ -113,7 +130,7 @@ consumers:
 | `consumers.show_percent` | `true` | Shows each child's share of its parent (%) on the child pill |
 | `consumers.devices[]` | — | `entity`, `name`, `color`, `icon`, `min_power` (W, overrides the global one for this device), `parent` (entity of another device; see below) |
 
-### Consumer layout
+### Consumer layout (horizontal)
 
 - **Up to 4 visible:** as in the original. One above home, one below, and two in the right
   column, at normal size.
@@ -130,6 +147,8 @@ straight below home, the next two beside it, and the rest below them, closest to
 to the lower circles run down the gaps between the columns. The drawing is narrower, so at the same
 card width every circle and text is about 28 % bigger. The card keeps the same height for up to 8
 consumers, so it does not jump as consumers come and go, and only grows from the 9th (up to 12).
+The empty band above the drawing is trimmed when no name sits above it (e.g. with the Low-carbon
+name inside its circle).
 
 ### Child consumers
 
