@@ -1,0 +1,35 @@
+name: validate
+
+# `hacs/action` builds nothing: it asks the GitHub API about the published
+# repository at the given ref, so it needs no checkout, Node or `dist/`.
+#
+# Tag pushes are left out deliberately. HACS resolves hacs.json's `filename`
+# from the release assets first and only then from the repository tree; as
+# `dist/` is in .gitignore, at the instant of the tag push the asset is not yet
+# attached to a release, and validating there would fail on every tag.
+#
+# The daily `schedule` catches a change in HACS's own requirements, which can
+# fail this repository without anything here having been touched.
+#
+# `@main` rather than a tag: the action's latest tag (22.5.0) still points at
+# `docker://ghcr.io/hacs/action:main`, so pinning it pins no version at all.
+
+on:
+  push:
+    branches: ['**']
+  pull_request:
+  schedule:
+    - cron: '0 4 * * *'
+  workflow_dispatch:
+
+permissions: {}
+
+jobs:
+  hacs:
+    runs-on: ubuntu-latest
+    steps:
+      # `plugin` is HACS's internal category for a dashboard card.
+      - name: HACS validation
+        uses: hacs/action@main
+        with:
+          category: plugin
