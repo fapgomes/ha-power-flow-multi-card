@@ -29,7 +29,8 @@ export interface CardConfig {
   grid: { entity: PowerEntity; invert?: boolean; show_name?: boolean; name_inside?: boolean };
   low_carbon?: { entity: string; show_name?: boolean; name_inside?: boolean };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };
-  battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean };
+  /** grid_link: flows between battery and grid (default true); false drops them and their line. */
+  battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean; grid_link?: boolean };
   /** show_consumers: inner ring with the visible consumers' shares of home (default true). */
   home?: { entity?: string; show_consumers?: boolean };
   consumers?: ConsumersConfig;

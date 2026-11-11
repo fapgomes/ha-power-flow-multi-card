@@ -291,7 +291,8 @@ export class PowerFlowMultiCard extends LitElement {
     if (!this.config || !this.hass) return nothing;
     const cfg = this.config;
     const r: Readings = readState(this.hass, cfg);
-    const f = computeFlows(totalsFromReadings(r), r.fossilPct);
+    const batteryGrid = cfg.battery?.grid_link !== false;
+    const f = computeFlows(totalsFromReadings(r), r.fossilPct, batteryGrid);
     const hasSolar = !!cfg.solar;
     const hasBattery = !!cfg.battery?.banks?.length;
     const hasLowCarbon = !!cfg.low_carbon;
@@ -339,9 +340,11 @@ export class PowerFlowMultiCard extends LitElement {
           w >= 0 ? COLORS.batteryDischarge : COLORS.batteryCharge, Math.abs(w), { reverse: w > 0, kind: 'bank', r: 2.5 }));
       });
       paths.push(this.flow('battery-home', g.flows.batteryHome, COLORS.batteryDischarge, f.batteryToHome));
-      paths.push(this.flow('grid-battery', g.flows.gridBattery,
-        f.batteryToGrid > 0 ? COLORS.batteryDischarge : COLORS.gridImport,
-        Math.max(f.gridToBattery, f.batteryToGrid), { reverse: f.batteryToGrid > 0 }));
+      if (batteryGrid) {
+        paths.push(this.flow('grid-battery', g.flows.gridBattery,
+          f.batteryToGrid > 0 ? COLORS.batteryDischarge : COLORS.gridImport,
+          Math.max(f.gridToBattery, f.batteryToGrid), { reverse: f.batteryToGrid > 0 }));
+      }
       if (hasSolar) paths.push(this.flow('solar-battery', g.flows.solarBattery, COLORS.batteryCharge, f.solarToBattery));
     }
     visible.forEach((c, i) => {

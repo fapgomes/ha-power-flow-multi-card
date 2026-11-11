@@ -22,6 +22,14 @@ describe('computeFlows', () => {
     expect(computeFlows(t({ batteryCharge: 400, solar: 100, gridImport: 1000 }), null))
       .toMatchObject({ solarToBattery: 100, gridToBattery: 300, gridToHome: 700 });
   });
+  it('without battery ↔ grid flows, grid only feeds home and battery only feeds home', () => {
+    expect(computeFlows(t({ batteryCharge: 400, solar: 100, gridImport: 1000 }), null, false))
+      .toMatchObject({ solarToBattery: 100, gridToBattery: 0, gridToHome: 1000, home: 1000 });
+    expect(computeFlows(t({ batteryDischarge: 800, gridExport: 300 }), null, false))
+      .toMatchObject({ batteryToGrid: 0, batteryToHome: 800, solarToGrid: 0 });
+    expect(computeFlows(t({ solar: 1000, batteryDischarge: 500, gridExport: 700 }), null, false))
+      .toMatchObject({ solarToGrid: 700, solarToHome: 300, batteryToHome: 500, batteryToGrid: 0 });
+  });
   it('low carbon', () => {
     expect(computeFlows(t({ gridImport: 1000 }), 40).lowCarbon).toBe(600);
   });

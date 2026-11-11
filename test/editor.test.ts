@@ -164,6 +164,10 @@ describe('editor', () => {
     expect(last(changes).battery).toEqual({ ...base.battery, name_inside: false });
     change(el, 'battery', { name_inside: true, show_name: false });
     expect(last(changes).battery).toEqual({ ...base.battery, show_name: false });
+    change(el, 'battery', { ...form(el, 'battery').data, grid_link: false });
+    expect(last(changes).battery).toMatchObject({ banks: base.battery!.banks, grid_link: false });
+    change(el, 'battery', { ...form(el, 'battery').data, grid_link: true });
+    expect(last(changes).battery).not.toHaveProperty('grid_link');
     expect(form(el, 'solar').data).toMatchObject({ show_name: true });
   });
 

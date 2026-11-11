@@ -45,6 +45,7 @@ const TEXT = {
     h_sort: 'A consumer only overtakes another after beating it by this margin for this long',
     h_device_min: 'Overrides the global minimum power when set',
     parent: 'Parent', h_parent: 'Shown as a small pill on the parent, whose value already includes this one',
+    grid_link: 'Battery ↔ grid flows', h_grid_link: 'Turn off when the battery can neither charge from nor export to the grid; the line between them is hidden',
   },
   pt: {
     grid: 'Rede', low_carbon: 'Low-carbon', home: 'Casa', solar: 'Solar', battery: 'Bateria', consumers: 'Consumos',
@@ -71,6 +72,7 @@ const TEXT = {
     h_sort: 'Um consumo só ultrapassa outro se o superar por esta margem durante este tempo',
     h_device_min: 'Se preenchida, substitui a potência mínima global',
     parent: 'Mãe', h_parent: 'Aparece como pastilha na mãe, cujo valor já inclui este',
+    grid_link: 'Fluxos bateria ↔ rede', h_grid_link: 'Desligar se a bateria não carrega da rede nem exporta para ela; a linha entre as duas fica escondida',
   },
 };
 type Key = keyof typeof TEXT.en;
@@ -172,10 +174,10 @@ export class PowerFlowMultiCardEditor extends LitElement {
         ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }), sources: list }
         : undefined));
     };
-    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean; show_name?: boolean }) => {
-      const next = { banks, name_inside: cfg.battery?.name_inside, show_name: cfg.battery?.show_name, ...patch };
+    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean; show_name?: boolean; grid_link?: boolean }) => {
+      const next = { banks, name_inside: cfg.battery?.name_inside, show_name: cfg.battery?.show_name, grid_link: cfg.battery?.grid_link, ...patch };
       this.emit(withSection(cfg, 'battery', next.banks.length
-        ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }) } : undefined));
+        ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside, grid_link: next.grid_link }) } : undefined));
     };
     const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
     /** The grid entity form knows nothing of the name options, so they are carried over here. */
@@ -267,8 +269,10 @@ export class PowerFlowMultiCardEditor extends LitElement {
           (list) => setSolar({ sources: list }), () => ({ entity: '' }))}`)}
 
       ${this.panel('battery', 'mdi:battery-high', html`
-        ${this.form('battery', { show_name: cfg.battery?.show_name !== false, name_inside: cfg.battery?.name_inside !== false }, nameOptions,
-          (v) => setBattery({ show_name: v.show_name, name_inside: v.name_inside }), nameLabels)}
+        ${this.form('battery', {
+          show_name: cfg.battery?.show_name !== false, name_inside: cfg.battery?.name_inside !== false, grid_link: cfg.battery?.grid_link !== false,
+        }, [...nameOptions, { name: 'grid_link', selector: { boolean: {} }, helper: 'h_grid_link' }],
+          (v) => setBattery({ show_name: v.show_name, name_inside: v.name_inside, grid_link: v.grid_link }), nameLabels)}
         ${this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
         (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
         setBanks, () => ({ power: '', soc: '' }))}`)}

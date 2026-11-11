@@ -118,6 +118,7 @@ consumers:
 | `battery.show_name` | `true` | Shows the "Battery" name; `false` hides it |
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
+| `battery.grid_link` | `true` | Flows between battery and grid; `false` (battery can neither charge from nor export to the grid) never attributes them and hides the line between the two |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
 | `home.show_consumers` | `true` | Inner ring on home with one arc per visible consumer, in its colour, sized by its share of home; the rest stays grey |
 | `consumers.columns` | `2` | Grid columns to the right of home (horizontal layout only) |

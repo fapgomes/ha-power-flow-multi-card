@@ -69,6 +69,18 @@ describe('power-flow-multi-card', () => {
     expect(titles).toHaveLength(6);
   });
 
+  it('drops the grid ↔ battery line when battery.grid_link is false', async () => {
+    const night = { ...fullStates, 'sensor.grid': '1000', 'sensor.s1': '0', 'sensor.s2': '0', 'sensor.s3': '0' };
+    let el = await mount(full, night);
+    expect(q(el, 'path[data-flow="grid-battery"]')).toHaveLength(1);
+    expect(q(el, '[data-dot="grid-battery"]')).toHaveLength(1);
+    document.body.innerHTML = '';
+    el = await mount({ ...full, battery: { ...full.battery!, grid_link: false } }, night);
+    expect(q(el, 'path[data-flow="grid-battery"]')).toHaveLength(0);
+    expect(q(el, '[data-dot="grid-battery"]')).toHaveLength(0);
+    expect(q(el, '[data-dot="grid-home"]')).toHaveLength(1);
+  });
+
   it('hides the solar sources when solar is idle, unless show_idle_sources is set', async () => {
     const night = { ...fullStates, 'sensor.s1': '0', 'sensor.s2': 'unavailable', 'sensor.s3': '1' };
     let el = await mount(full, night);
