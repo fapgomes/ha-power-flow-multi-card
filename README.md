@@ -119,6 +119,9 @@ consumers:
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
 | `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
 | `battery.grid_link` | `true` | Flows between battery and grid; `false` (battery can neither charge from nor export to the grid) never attributes them and hides the line between the two |
+| `battery.tap_action` | more-info of the first bank's power | What a tap on the battery circle does: `{action: more-info, entity: …}`, `{action: navigate, navigation_path: …}`, `{action: url, url_path: …}` or `{action: none}` |
+| `battery.hold_action` | — | What a long press on the battery circle does; same actions, and `more-info` defaults to the first bank's `soc` |
+| `battery.double_tap_action` | — | What a double tap on the battery circle does; same as `hold_action`. When set, a single tap acts 250 ms later |
 | `home.entity` | computed | Home consumption; defaults to the balance of the flows |
 | `home.show_consumers` | `true` | Inner ring on home with one arc per visible consumer, in its colour, sized by its share of home; the rest stays grey |
 | `consumers.columns` | `2` | Grid columns to the right of home (horizontal layout only) |

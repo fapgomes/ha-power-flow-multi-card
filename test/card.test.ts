@@ -1,4 +1,4 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import '../src/power-flow-multi-card';
 import type { CardConfig, HassLike } from '../src/types';
 
@@ -376,6 +376,127 @@ describe('power-flow-multi-card', () => {
     el.addEventListener('hass-more-info', (e) => { detail = (e as CustomEvent).detail; });
     (q(el, '[data-node="solar-source"]')[0] as SVGElement).dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
     expect(detail).toEqual({ entityId: 'sensor.s1' });
+  });
+
+  describe('battery hold action', () => {
+    const press = (n: Element, type: string, button = 0) => {
+      const e = new Event(type, { bubbles: true, composed: true });
+      Object.defineProperty(e, 'button', { value: button });
+      n.dispatchEvent(e);
+    };
+    const click = (n: Element) => n.dispatchEvent(new MouseEvent('click', { bubbles: true, composed: true }));
+    const withHold = (hold_action: NonNullable<CardConfig['battery']>['hold_action']): CardConfig =>
+      ({ ...full, battery: { ...full.battery!, hold_action } });
+    const opened = (el: Card) => {
+      const ids: string[] = [];
+      el.addEventListener('hass-more-info', (e) => ids.push((e as CustomEvent).detail.entityId));
+      return ids;
+    };
+
+    afterEach(() => { vi.useRealTimers(); });
+
+    it('opens more-info of the configured entity after a long press, and swallows the click that follows', async () => {
+      const el = await mount(withHold({ action: 'more-info', entity: 'sensor.soc_all' }), fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const node = q(el, '[data-node="battery"]')[0];
+      press(node, 'pointerdown');
+      vi.advanceTimersByTime(499);
+      expect(ids).toEqual([]);
+      vi.advanceTimersByTime(1);
+      expect(ids).toEqual(['sensor.soc_all']);
+      press(node, 'pointerup');
+      click(node);
+      expect(ids).toEqual(['sensor.soc_all']);
+      // The next tap works as usual.
+      press(node, 'pointerdown');
+      press(node, 'pointerup');
+      click(node);
+      expect(ids).toEqual(['sensor.soc_all', 'sensor.b1']);
+    });
+
+    it('defaults more-info to the first bank state of charge', async () => {
+      const el = await mount(withHold({ action: 'more-info' }), fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      press(q(el, '[data-node="battery"]')[0], 'pointerdown');
+      vi.advanceTimersByTime(500);
+      expect(ids).toEqual(['sensor.soc1']);
+    });
+
+    it('keeps the tap when the press is short, leaves the circle or uses another button', async () => {
+      const el = await mount(withHold({ action: 'more-info', entity: 'sensor.soc_all' }), fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const node = q(el, '[data-node="battery"]')[0];
+      press(node, 'pointerdown');
+      vi.advanceTimersByTime(200);
+      press(node, 'pointerup');
+      click(node);
+      vi.advanceTimersByTime(1000);
+      expect(ids).toEqual(['sensor.b1']);
+      press(node, 'pointerdown');
+      press(node, 'pointerleave');
+      vi.advanceTimersByTime(1000);
+      press(node, 'pointerdown', 2);
+      vi.advanceTimersByTime(1000);
+      expect(ids).toEqual(['sensor.b1']);
+    });
+
+    it('navigates on hold', async () => {
+      const el = await mount(withHold({ action: 'navigate', navigation_path: '/lovelace-energia/solar' }), fullStates);
+      const ids = opened(el);
+      let changed = 0;
+      const onChange = () => { changed++; };
+      window.addEventListener('location-changed', onChange);
+      vi.useFakeTimers();
+      press(q(el, '[data-node="battery"]')[0], 'pointerdown');
+      vi.advanceTimersByTime(500);
+      window.removeEventListener('location-changed', onChange);
+      expect(window.location.pathname).toBe('/lovelace-energia/solar');
+      expect(changed).toBe(1);
+      expect(ids).toEqual([]);
+    });
+
+    it('runs the tap action instead of the default more-info', async () => {
+      const el = await mount({ ...full, battery: { ...full.battery!, tap_action: { action: 'more-info', entity: 'sensor.soc_all' } } }, fullStates);
+      const ids = opened(el);
+      click(q(el, '[data-node="battery"]')[0]);
+      expect(ids).toEqual(['sensor.soc_all']);
+      const off = await mount({ ...full, battery: { ...full.battery!, tap_action: { action: 'none' } } }, fullStates);
+      const none = opened(off);
+      click(q(off, '[data-node="battery"]')[0]);
+      expect(none).toEqual([]);
+    });
+
+    it('tells a double tap from a tap', async () => {
+      const el = await mount({ ...full, battery: { ...full.battery!, double_tap_action: { action: 'more-info' } } }, fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const node = q(el, '[data-node="battery"]')[0];
+      click(node);
+      expect(ids).toEqual([]);
+      vi.advanceTimersByTime(250);
+      expect(ids).toEqual(['sensor.b1']);
+      click(node);
+      vi.advanceTimersByTime(100);
+      click(node);
+      vi.advanceTimersByTime(1000);
+      expect(ids).toEqual(['sensor.b1', 'sensor.soc1']);
+    });
+
+    it('does nothing on a long press without a hold action', async () => {
+      const el = await mount(full, fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const node = q(el, '[data-node="battery"]')[0];
+      press(node, 'pointerdown');
+      vi.advanceTimersByTime(1000);
+      expect(ids).toEqual([]);
+      press(node, 'pointerup');
+      click(node);
+      expect(ids).toEqual(['sensor.b1']);
+    });
   });
 
   it('only animates flows above zero', async () => {

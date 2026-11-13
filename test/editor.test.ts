@@ -171,6 +171,53 @@ describe('editor', () => {
     expect(form(el, 'solar').data).toMatchObject({ show_name: true });
   });
 
+  it('edits the battery actions and keeps them through other changes', async () => {
+    const names = (el: Editor) => (form(el, 'battery-actions') as unknown as { schema: { name: string }[] }).schema.map((s) => s.name);
+    const { el, changes } = await mount(base);
+    // Tap defaults to more-info of the first bank's power; the others do nothing.
+    expect(form(el, 'battery-actions').data).toEqual({ tap: 'more-info', hold: 'none', double_tap: 'none' });
+    expect(names(el)).toEqual(['tap', 'tap_entity', 'hold', 'double_tap']);
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, hold: 'more-info' });
+    expect(last(changes).battery).toEqual({ ...base.battery, hold_action: { action: 'more-info' } });
+    await el.updateComplete;
+    expect(names(el)).toContain('hold_entity');
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, hold_entity: 'sensor.soc_all' });
+    const hold_action = { action: 'more-info', entity: 'sensor.soc_all' };
+    expect(last(changes).battery).toEqual({ ...base.battery, hold_action });
+    await el.updateComplete;
+    // Other battery options and bank edits keep it.
+    change(el, 'battery', { ...form(el, 'battery').data, name_inside: false });
+    expect(last(changes).battery).toEqual({ ...base.battery, name_inside: false, hold_action });
+    await el.updateComplete;
+    change(el, 'bank-0', { mode: 'single', power: 'sensor.b1', soc: 'sensor.soc1', capacity: 10 });
+    expect(last(changes).battery).toMatchObject({ hold_action, banks: [{ capacity: 10 }] });
+    await el.updateComplete;
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, tap: 'navigate', tap_path: '/lovelace-energia/solar', double_tap: 'url', double_tap_path: 'https://example.com' });
+    expect(last(changes).battery).toMatchObject({
+      hold_action, tap_action: { action: 'navigate', navigation_path: '/lovelace-energia/solar' },
+      double_tap_action: { action: 'url', url_path: 'https://example.com' },
+    });
+    await el.updateComplete;
+    expect(names(el)).toEqual(['tap', 'tap_path', 'hold', 'hold_entity', 'double_tap', 'double_tap_path']);
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, tap: 'none', hold: 'none', double_tap: 'none' });
+    expect(last(changes).battery).toMatchObject({ tap_action: { action: 'none' } });
+    expect(last(changes).battery).not.toHaveProperty('hold_action');
+    expect(last(changes).battery).not.toHaveProperty('double_tap_action');
+    await el.updateComplete;
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, tap: 'more-info' });
+    expect(last(changes).battery).not.toHaveProperty('tap_action');
+  });
+
+  it('keeps the banks and the battery actions in collapsed panels', async () => {
+    const { el } = await mount(base);
+    const panel = (key: string) => el.shadowRoot!.querySelector(`[data-panel="battery"] ha-expansion-panel[data-panel="${key}"]`) as (HTMLElement & { header: string; expanded?: boolean }) | null;
+    expect(panel('banks')!.header).toBe('Bancos (1)');
+    expect(panel('banks')!.querySelector('ha-form[data-form="bank-0"]')).not.toBeNull();
+    expect(panel('banks')!.expanded).toBeFalsy();
+    expect(panel('actions')!.header).toBe('Interações');
+    expect(panel('actions')!.expanded).toBeFalsy();
+  });
+
   it('removes the solar section when the total and every source are gone', async () => {
     const { el, changes } = await mount({ ...base, solar: { sources: [{ entity: 'sensor.s1' }] } });
     click(el, '[data-list="sources"][data-index="0"][data-action="remove"]');

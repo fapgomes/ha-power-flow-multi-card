@@ -5,6 +5,13 @@ export interface SolarSourceConfig { entity: string; name?: string; icon?: strin
 export interface BankConfig { power: BankPower; soc: string; name?: string; capacity?: number; invert?: boolean }
 export interface DeviceConfig { entity: string; name?: string; color?: string; icon?: string; min_power?: number; parent?: string }
 
+/** What a tap, long press or double tap does; a subset of the Home Assistant actions. */
+export type ActionConfig =
+  | { action: 'more-info'; entity?: string }
+  | { action: 'navigate'; navigation_path: string }
+  | { action: 'url'; url_path: string }
+  | { action: 'none' };
+
 export interface ConsumersConfig {
   columns?: number;
   max_visible?: number;
@@ -29,8 +36,15 @@ export interface CardConfig {
   grid: { entity: PowerEntity; invert?: boolean; show_name?: boolean; name_inside?: boolean };
   low_carbon?: { entity: string; show_name?: boolean; name_inside?: boolean };
   solar?: { entity?: string; sources: SolarSourceConfig[]; show_idle_sources?: boolean; name_inside?: boolean; show_name?: boolean };
-  /** grid_link: flows between battery and grid (default true); false drops them and their line. */
-  battery?: { banks: BankConfig[]; name_inside?: boolean; show_name?: boolean; grid_link?: boolean };
+  /**
+   * grid_link: flows between battery and grid (default true); false drops them and their line.
+   * tap_action: what a tap on the battery circle does (default: more-info of the first bank's power).
+   * hold_action, double_tap_action: what a long press and a double tap do (default nothing).
+   */
+  battery?: {
+    banks: BankConfig[]; name_inside?: boolean; show_name?: boolean; grid_link?: boolean;
+    tap_action?: ActionConfig; hold_action?: ActionConfig; double_tap_action?: ActionConfig;
+  };
   /** show_consumers: inner ring with the visible consumers' shares of home (default true). */
   home?: { entity?: string; show_consumers?: boolean };
   consumers?: ConsumersConfig;

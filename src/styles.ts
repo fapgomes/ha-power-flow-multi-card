@@ -44,6 +44,9 @@ export const styles = css`
   }
   [data-node] {
     cursor: pointer;
+    user-select: none;
+    -webkit-user-select: none;
+    -webkit-touch-callout: none;
   }
   .bold text {
     font-weight: bold;

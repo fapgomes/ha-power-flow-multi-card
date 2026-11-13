@@ -7,13 +7,18 @@ import './editor';
 import { ConsumerRanker } from './ranking';
 import { normalizeConfig, readState } from './readings';
 import { COLORS, styles } from './styles';
-import type { CardConfig, HassLike, Readings } from './types';
+import type { ActionConfig, CardConfig, HassLike, Readings } from './types';
 import { dotDuration, formatPower, truncate } from './units';
 
 /** Below this total (W) solar counts as idle and its source pills are hidden. */
 const IDLE_SOLAR_W = 10;
 
 const DASH = '—';
+
+/** How long (ms) a press must last to count as a hold. */
+const HOLD_MS = 500;
+/** How long (ms) a tap waits for a second one, when a double tap action is set. */
+const DOUBLE_TAP_MS = 250;
 
 /** Box an outside label of `chars` characters takes, so child pills can avoid it. */
 function labelRect(l: Label, chars: number, size = 10): Rect {
@@ -62,6 +67,10 @@ export class PowerFlowMultiCard extends LitElement {
   private readonly uid = `pfmc${++instanceCounter}`;
   /** Label boxes drawn in the current render, so child pills can avoid them. */
   private labelRects: Rect[] = [];
+  private holdTimer?: ReturnType<typeof setTimeout>;
+  private tapTimer?: ReturnType<typeof setTimeout>;
+  /** A hold action ran on the current press, so the click that ends it is not a tap. */
+  private held = false;
 
   static getConfigElement(): HTMLElement {
     return document.createElement('power-flow-multi-card-editor');
@@ -104,6 +113,45 @@ export class PowerFlowMultiCard extends LitElement {
   private moreInfo(entityId: string | undefined): void {
     if (!entityId) return;
     this.dispatchEvent(new CustomEvent('hass-more-info', { detail: { entityId }, bubbles: true, composed: true }));
+  }
+
+  private runAction(action: ActionConfig, fallbackEntity: string | undefined): void {
+    switch (action.action) {
+      case 'more-info':
+        this.moreInfo(action.entity ?? fallbackEntity);
+        break;
+      case 'navigate':
+        if (!action.navigation_path) break;
+        history.pushState(null, '', action.navigation_path);
+        window.dispatchEvent(new CustomEvent('location-changed', { detail: { replace: false }, bubbles: true, composed: true }));
+        break;
+      case 'url':
+        if (action.url_path) window.open(action.url_path);
+        break;
+    }
+  }
+
+  private startHold(e: PointerEvent, action: ActionConfig, fallbackEntity: string | undefined): void {
+    this.cancelHold();
+    this.held = false;
+    if (e.button) return;
+    this.holdTimer = setTimeout(() => {
+      this.holdTimer = undefined;
+      this.held = true;
+      this.runAction(action, fallbackEntity);
+    }, HOLD_MS);
+  }
+
+  private cancelHold(): void {
+    clearTimeout(this.holdTimer);
+    this.holdTimer = undefined;
+  }
+
+  disconnectedCallback(): void {
+    super.disconnectedCallback();
+    this.cancelHold();
+    clearTimeout(this.tapTimer);
+    this.tapTimer = undefined;
   }
 
   /** A path plus, when w > 0, an animated dot along it. */
@@ -156,6 +204,10 @@ export class PowerFlowMultiCard extends LitElement {
       linesAboveIcon?: number; title?: string; fontSize?: number; strokeWidth?: number;
       /** Name shown in a floating label while the pointer is over the circle. */
       hoverName?: string;
+      /** Action of a tap (default: more-info of the entity). */
+      tap?: ActionConfig;
+      /** Actions of a long press and a double tap, and the entity their more-info falls back to. */
+      hold?: ActionConfig; doubleTap?: ActionConfig; holdEntity?: string;
     } = {},
   ): SVGTemplateResult {
     const fs = opts.fontSize ?? 10;
@@ -169,9 +221,30 @@ export class PowerFlowMultiCard extends LitElement {
     const label: Label = opts.labelAt ?? { x: c.x, y: labelY, anchor: 'middle' };
     if (opts.label) this.labelRects.push(labelRect(label, opts.label.length, opts.labelSize ?? 10));
     const hover = opts.hoverName;
-    return svg`<g data-node=${kind} @click=${() => this.moreInfo(entity)}
+    const hold = opts.hold && opts.hold.action !== 'none' ? opts.hold : undefined;
+    const double = opts.doubleTap && opts.doubleTap.action !== 'none' ? opts.doubleTap : undefined;
+    const runTap = () => (opts.tap ? this.runAction(opts.tap, entity) : this.moreInfo(entity));
+    const tap = () => {
+      // The click that ends a hold is not a tap.
+      if (hold && this.held) { this.held = false; return; }
+      if (!double) { runTap(); return; }
+      // With a double tap action, a tap waits to see whether a second one follows.
+      if (this.tapTimer !== undefined) {
+        clearTimeout(this.tapTimer);
+        this.tapTimer = undefined;
+        this.runAction(double, opts.holdEntity ?? entity);
+      } else {
+        this.tapTimer = setTimeout(() => { this.tapTimer = undefined; runTap(); }, DOUBLE_TAP_MS);
+      }
+    };
+    const leave = hold || hover ? () => { this.cancelHold(); if (hover) this.hovered = undefined; } : undefined;
+    return svg`<g data-node=${kind} @click=${tap}
+      @pointerdown=${hold ? (e: PointerEvent) => this.startHold(e, hold, opts.holdEntity ?? entity) : undefined}
+      @pointerup=${hold ? () => this.cancelHold() : undefined}
+      @pointercancel=${hold ? () => this.cancelHold() : undefined}
+      @contextmenu=${hold ? (e: Event) => { if (this.holdTimer !== undefined || this.held) e.preventDefault(); } : undefined}
       @pointerenter=${hover ? () => { this.hovered = { name: hover, c }; } : undefined}
-      @pointerleave=${hover ? () => { this.hovered = undefined; } : undefined}>
+      @pointerleave=${leave}>
       <title>${opts.title ?? opts.label ?? entity ?? kind}</title>
       <circle class="bg" cx=${c.x} cy=${c.y} r=${c.r} stroke=${color} stroke-width=${opts.strokeWidth ?? 2}></circle>
       ${layout ? this.icon(c, opts.icon!, opts.iconColor ?? color, layout) : nothing}
@@ -394,6 +467,8 @@ export class PowerFlowMultiCard extends LitElement {
       ], {
         title: 'Battery', fontSize: 11, strokeWidth: 2.5, icon: batteryIcon(r.batterySoc), iconColor: 'var(--primary-text-color)',
         iconScale: batteryName === 'inside' ? 0.34 : 0.42, linesAboveIcon: 1,
+        tap: cfg.battery!.tap_action, hold: cfg.battery!.hold_action, doubleTap: cfg.battery!.double_tap_action,
+        holdEntity: cfg.battery!.banks[0]?.soc,
       }));
       bankPills.forEach((p, i) => {
         const b = r.banks[i];

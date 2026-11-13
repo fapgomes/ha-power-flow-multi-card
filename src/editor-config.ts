@@ -1,4 +1,4 @@
-import type { BankConfig, CardConfig, DeviceConfig } from './types';
+import type { ActionConfig, BankConfig, CardConfig, DeviceConfig } from './types';
 
 /** Pure conversions between the YAML config and the flat data each ha-form edits. */
 
@@ -79,6 +79,35 @@ export function bankToForm(b: BankConfig): BankForm {
 export function bankFromForm(f: BankForm): BankConfig {
   const power = f.mode === 'split' ? { charge: f.charge ?? '', discharge: f.discharge ?? '' } : f.power ?? '';
   return { power, soc: f.soc ?? '', ...compact({ name: f.name, capacity: f.capacity, invert: f.invert }) };
+}
+
+export type ActionKey = 'tap' | 'hold' | 'double_tap';
+export type ActionName = ActionConfig['action'];
+
+/**
+ * An action as flat ha-form fields named after `key`: the action itself, `<key>_entity` and `<key>_path`.
+ * `fallback` is what the card does when the action is not set, which is left out of the YAML.
+ */
+export function actionToForm(a: ActionConfig | undefined, key: ActionKey, fallback: ActionName = 'none'): Record<string, string> {
+  const out = (extra: Record<string, string | undefined>) => compact({ [key]: a?.action ?? fallback, ...extra }) as Record<string, string>;
+  switch (a?.action) {
+    case 'more-info': return out({ [`${key}_entity`]: a.entity });
+    case 'navigate': return out({ [`${key}_path`]: a.navigation_path });
+    case 'url': return out({ [`${key}_path`]: a.url_path });
+    default: return out({});
+  }
+}
+
+export function actionFromForm(f: Record<string, unknown>, key: ActionKey, fallback: ActionName = 'none'): ActionConfig | undefined {
+  const action = (f[key] as ActionName | undefined) ?? fallback;
+  const path = (f[`${key}_path`] as string | undefined) ?? '';
+  const entity = f[`${key}_entity`] as string | undefined;
+  switch (action) {
+    case 'more-info': return fallback === 'more-info' && !entity ? undefined : { action, ...compact({ entity }) };
+    case 'navigate': return { action, navigation_path: path };
+    case 'url': return { action, url_path: path };
+    default: return fallback === 'none' ? undefined : { action: 'none' };
+  }
 }
 
 export interface DeviceForm { entity?: string; name?: string; icon?: string; color?: Rgb; min_power?: number; parent?: string }

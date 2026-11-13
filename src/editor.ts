@@ -1,8 +1,8 @@
 import { css, html, LitElement, nothing, type TemplateResult } from 'lit';
 import { property, state } from 'lit/decorators.js';
 import {
-  bankFromForm, bankToForm, compact, deviceFromForm, deviceToForm, gridFromForm, gridToForm, moveItem, offOnly, removeItem,
-  replaceItem, withSection, type BankForm, type DeviceForm, type GridForm,
+  actionFromForm, actionToForm, bankFromForm, bankToForm, compact, deviceFromForm, deviceToForm, gridFromForm, gridToForm, moveItem, offOnly, removeItem,
+  replaceItem, withSection, type ActionKey, type ActionName, type BankForm, type DeviceForm, type GridForm,
 } from './editor-config';
 import type { BankConfig, CardConfig, DeviceConfig, HassLike, SolarSourceConfig } from './types';
 
@@ -46,6 +46,10 @@ const TEXT = {
     h_device_min: 'Overrides the global minimum power when set',
     parent: 'Parent', h_parent: 'Shown as a small pill on the parent, whose value already includes this one',
     grid_link: 'Battery ↔ grid flows', h_grid_link: 'Turn off when the battery can neither charge from nor export to the grid; the line between them is hidden',
+    actions: 'Interactions', tap: 'Tap action', hold: 'Hold action', double_tap: 'Double tap action',
+    act_none: 'Nothing', act_more_info: 'More info', act_navigate: 'Navigate', act_url: 'Open URL',
+    action_entity: 'Entity', action_path: 'Navigation path', action_url: 'URL',
+    h_tap_entity: 'Power of the first bank when empty', h_hold_entity: 'State of charge of the first bank when empty',
   },
   pt: {
     grid: 'Rede', low_carbon: 'Low-carbon', home: 'Casa', solar: 'Solar', battery: 'Bateria', consumers: 'Consumos',
@@ -73,6 +77,10 @@ const TEXT = {
     h_device_min: 'Se preenchida, substitui a potência mínima global',
     parent: 'Mãe', h_parent: 'Aparece como pastilha na mãe, cujo valor já inclui este',
     grid_link: 'Fluxos bateria ↔ rede', h_grid_link: 'Desligar se a bateria não carrega da rede nem exporta para ela; a linha entre as duas fica escondida',
+    actions: 'Interações', tap: 'Ação ao tocar', hold: 'Ação ao manter premido', double_tap: 'Ação ao tocar duas vezes',
+    act_none: 'Nada', act_more_info: 'Mais informações', act_navigate: 'Navegar', act_url: 'Abrir URL',
+    action_entity: 'Entidade', action_path: 'Caminho de navegação', action_url: 'URL',
+    h_tap_entity: 'Se vazia, é a potência do primeiro banco', h_hold_entity: 'Se vazia, é o estado de carga do primeiro banco',
   },
 };
 type Key = keyof typeof TEXT.en;
@@ -125,12 +133,12 @@ export class PowerFlowMultiCardEditor extends LitElement {
   }
 
   private list<T>(key: string, items: T[], title: (item: T) => string, body: (item: T, i: number) => TemplateResult,
-    onChange: (items: T[]) => void, create: () => T): TemplateResult {
+    onChange: (items: T[]) => void, create: () => T, titled = true): TemplateResult {
     const button = (action: keyof typeof MDI, i: number, disabled = false, fn: () => void) => html`<ha-icon-button
       data-list=${key} data-index=${i} data-action=${action} .label=${this.t(action)} .path=${MDI[action]}
       ?disabled=${disabled} @click=${fn}></ha-icon-button>`;
     return html`
-      <div class="list-title">${this.t(key as Key)}</div>
+      ${titled ? html`<div class="list-title">${this.t(key as Key)}</div>` : nothing}
       ${items.map((item, i) => html`<div class="item">
         <div class="item-header">
           <span>${i + 1}. ${title(item) || this.t('new_item')}</span>
@@ -156,6 +164,13 @@ export class PowerFlowMultiCardEditor extends LitElement {
     </ha-expansion-panel>`;
   }
 
+  /** A collapsed panel inside a section, for the parts that are seldom edited. */
+  private subPanel(key: Key, header: string, content: TemplateResult): TemplateResult {
+    return html`<ha-expansion-panel outlined .header=${header} data-panel=${key}>
+      <div class="content">${content}</div>
+    </ha-expansion-panel>`;
+  }
+
   protected render() {
     const cfg = this.config;
     if (!cfg) return nothing;
@@ -174,12 +189,40 @@ export class PowerFlowMultiCardEditor extends LitElement {
         ? { ...compact({ entity: next.entity, show_idle_sources: next.show_idle_sources }), ...offOnly({ show_name: next.show_name, name_inside: next.name_inside }), sources: list }
         : undefined));
     };
-    const setBattery = (patch: { banks?: BankConfig[]; name_inside?: boolean; show_name?: boolean; grid_link?: boolean }) => {
-      const next = { banks, name_inside: cfg.battery?.name_inside, show_name: cfg.battery?.show_name, grid_link: cfg.battery?.grid_link, ...patch };
+    const setBattery = (patch: Partial<NonNullable<CardConfig['battery']>>) => {
+      const b = cfg.battery;
+      const next = {
+        banks, name_inside: b?.name_inside, show_name: b?.show_name, grid_link: b?.grid_link,
+        tap_action: b?.tap_action, hold_action: b?.hold_action, double_tap_action: b?.double_tap_action, ...patch,
+      };
       this.emit(withSection(cfg, 'battery', next.banks.length
-        ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside, grid_link: next.grid_link }) } : undefined));
+        ? { banks: next.banks, ...offOnly({ show_name: next.show_name, name_inside: next.name_inside, grid_link: next.grid_link }),
+          ...compact({ tap_action: next.tap_action, hold_action: next.hold_action, double_tap_action: next.double_tap_action }) }
+        : undefined));
     };
     const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
+    // A tap opens the first bank's power unless told otherwise; hold and double tap do nothing.
+    const ACTIONS: [ActionKey, ActionName][] = [['tap', 'more-info'], ['hold', 'none'], ['double_tap', 'none']];
+    const actionData: Record<string, string> = Object.assign({}, ...ACTIONS.map(([k, fallback]) =>
+      actionToForm(cfg.battery?.[`${k}_action`], k, fallback)));
+    const actionLabels: Partial<Record<string, Key>> = {};
+    const actionSchema: Schema[] = ACTIONS.flatMap(([k]) => {
+      const action = actionData[k];
+      actionLabels[`${k}_entity`] = 'action_entity';
+      actionLabels[`${k}_path`] = action === 'url' ? 'action_url' : 'action_path';
+      return [
+        {
+          name: k,
+          selector: { select: { mode: 'dropdown', options: [
+            { value: 'none', label: t('act_none') }, { value: 'more-info', label: t('act_more_info') },
+            { value: 'navigate', label: t('act_navigate') }, { value: 'url', label: t('act_url') },
+          ] } },
+        },
+        ...(action === 'more-info' ? [{ name: `${k}_entity`, selector: { entity: {} }, helper: k === 'tap' ? 'h_tap_entity' : 'h_hold_entity' }] : []),
+        ...(action === 'navigate' ? [{ name: `${k}_path`, selector: { navigation: {} } }] : []),
+        ...(action === 'url' ? [{ name: `${k}_path`, selector: { text: { type: 'url' } } }] : []),
+      ];
+    });
     /** The grid entity form knows nothing of the name options, so they are carried over here. */
     const setGrid = (next: CardConfig['grid']) => {
       // Read the latest config: two changes can land before the next render.
@@ -273,9 +316,15 @@ export class PowerFlowMultiCardEditor extends LitElement {
           show_name: cfg.battery?.show_name !== false, name_inside: cfg.battery?.name_inside !== false, grid_link: cfg.battery?.grid_link !== false,
         }, [...nameOptions, { name: 'grid_link', selector: { boolean: {} }, helper: 'h_grid_link' }],
           (v) => setBattery({ show_name: v.show_name, name_inside: v.name_inside, grid_link: v.grid_link }), nameLabels)}
-        ${this.list<BankConfig>('banks', banks, (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
-        (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
-        setBanks, () => ({ power: '', soc: '' }))}`)}
+        ${this.subPanel('banks', `${t('banks')} (${banks.length})`, this.list<BankConfig>('banks', banks,
+          (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
+          (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
+          setBanks, () => ({ power: '', soc: '' }), false))}
+        ${banks.length ? this.subPanel('actions', t('actions'), this.form('battery-actions', actionData, actionSchema,
+          (v) => setBattery({
+            tap_action: actionFromForm(v, 'tap', 'more-info'), hold_action: actionFromForm(v, 'hold'),
+            double_tap_action: actionFromForm(v, 'double_tap'),
+          }), actionLabels)) : nothing}`)}
 
       ${this.panel('home', 'mdi:home', this.form('home', { ...compact({ entity: cfg.home?.entity }), show_consumers: cfg.home?.show_consumers !== false },
         [{ name: 'entity', selector: sensor, helper: 'h_home' }, { name: 'show_consumers', selector: { boolean: {} }, helper: 'h_show_consumers' }],
@@ -298,6 +347,9 @@ export class PowerFlowMultiCardEditor extends LitElement {
     ha-expansion-panel {
       display: block;
       margin-bottom: 8px;
+    }
+    .content ha-expansion-panel {
+      margin-bottom: 0;
     }
     .content {
       padding: 8px 0;
