@@ -4,7 +4,7 @@ import {
   actionFromForm, actionToForm, bankFromForm, bankToForm, compact, deviceFromForm, deviceToForm, gridFromForm, gridToForm, moveItem, offOnly, removeItem,
   replaceItem, withSection, type ActionKey, type ActionName, type BankForm, type DeviceForm, type GridForm,
 } from './editor-config';
-import type { BankConfig, CardConfig, DeviceConfig, HassLike, SolarSourceConfig } from './types';
+import type { ActionsConfig, BankConfig, CardConfig, DeviceConfig, HassLike, SolarSourceConfig } from './types';
 
 type EditorHass = HassLike & { locale?: { language?: string }; language?: string };
 type Schema = Record<string, unknown> & { name: string };
@@ -50,6 +50,9 @@ const TEXT = {
     act_none: 'Nothing', act_more_info: 'More info', act_navigate: 'Navigate', act_url: 'Open URL',
     action_entity: 'Entity', action_path: 'Navigation path', action_url: 'URL',
     h_tap_entity: 'Power of the first bank when empty', h_hold_entity: 'State of charge of the first bank when empty',
+    h_bank_tap_entity: 'Power of this bank when empty', h_bank_hold_entity: 'State of charge of this bank when empty',
+    capacity_mode: 'Capacity from', cap_value: 'Typed value', cap_entity: 'Sensor', capacity_entity: 'Capacity sensor',
+    h_capacity_entity: 'In Wh, kWh or MWh; kWh when it has no unit',
   },
   pt: {
     grid: 'Rede', low_carbon: 'Low-carbon', home: 'Casa', solar: 'Solar', battery: 'Bateria', consumers: 'Consumos',
@@ -81,6 +84,9 @@ const TEXT = {
     act_none: 'Nada', act_more_info: 'Mais informações', act_navigate: 'Navegar', act_url: 'Abrir URL',
     action_entity: 'Entidade', action_path: 'Caminho de navegação', action_url: 'URL',
     h_tap_entity: 'Se vazia, é a potência do primeiro banco', h_hold_entity: 'Se vazia, é o estado de carga do primeiro banco',
+    h_bank_tap_entity: 'Se vazia, é a potência deste banco', h_bank_hold_entity: 'Se vazia, é o estado de carga deste banco',
+    capacity_mode: 'Origem da capacidade', cap_value: 'Valor escrito', cap_entity: 'Sensor', capacity_entity: 'Sensor da capacidade',
+    h_capacity_entity: 'Em Wh, kWh ou MWh; kWh se não tiver unidade',
   },
 };
 type Key = keyof typeof TEXT.en;
@@ -165,7 +171,7 @@ export class PowerFlowMultiCardEditor extends LitElement {
   }
 
   /** A collapsed panel inside a section, for the parts that are seldom edited. */
-  private subPanel(key: Key, header: string, content: TemplateResult): TemplateResult {
+  private subPanel(key: string, header: string, content: TemplateResult): TemplateResult {
     return html`<ha-expansion-panel outlined .header=${header} data-panel=${key}>
       <div class="content">${content}</div>
     </ha-expansion-panel>`;
@@ -201,28 +207,48 @@ export class PowerFlowMultiCardEditor extends LitElement {
         : undefined));
     };
     const setBanks = (list: BankConfig[]) => setBattery({ banks: list });
-    // A tap opens the first bank's power unless told otherwise; hold and double tap do nothing.
+    // A tap opens the power (of the first bank, on the battery) unless told otherwise; hold and double tap do nothing.
     const ACTIONS: [ActionKey, ActionName][] = [['tap', 'more-info'], ['hold', 'none'], ['double_tap', 'none']];
-    const actionData: Record<string, string> = Object.assign({}, ...ACTIONS.map(([k, fallback]) =>
-      actionToForm(cfg.battery?.[`${k}_action`], k, fallback)));
-    const actionLabels: Partial<Record<string, Key>> = {};
-    const actionSchema: Schema[] = ACTIONS.flatMap(([k]) => {
-      const action = actionData[k];
-      actionLabels[`${k}_entity`] = 'action_entity';
-      actionLabels[`${k}_path`] = action === 'url' ? 'action_url' : 'action_path';
-      return [
-        {
-          name: k,
-          selector: { select: { mode: 'dropdown', options: [
-            { value: 'none', label: t('act_none') }, { value: 'more-info', label: t('act_more_info') },
-            { value: 'navigate', label: t('act_navigate') }, { value: 'url', label: t('act_url') },
-          ] } },
-        },
-        ...(action === 'more-info' ? [{ name: `${k}_entity`, selector: { entity: {} }, helper: k === 'tap' ? 'h_tap_entity' : 'h_hold_entity' }] : []),
-        ...(action === 'navigate' ? [{ name: `${k}_path`, selector: { navigation: {} } }] : []),
-        ...(action === 'url' ? [{ name: `${k}_path`, selector: { text: { type: 'url' } } }] : []),
-      ];
+    /** The three action fields of the battery or of one bank; the helpers name what more-info opens when left empty. */
+    const actionForm = (source: ActionsConfig | undefined, tapHelper: Key, holdHelper: Key) => {
+      const data: Record<string, string> = Object.assign({}, ...ACTIONS.map(([k, fallback]) =>
+        actionToForm(source?.[`${k}_action`], k, fallback)));
+      const labels: Partial<Record<string, Key>> = {};
+      const schema: Schema[] = ACTIONS.flatMap(([k]) => {
+        const action = data[k];
+        labels[`${k}_entity`] = 'action_entity';
+        labels[`${k}_path`] = action === 'url' ? 'action_url' : 'action_path';
+        return [
+          {
+            name: k,
+            selector: { select: { mode: 'dropdown', options: [
+              { value: 'none', label: t('act_none') }, { value: 'more-info', label: t('act_more_info') },
+              { value: 'navigate', label: t('act_navigate') }, { value: 'url', label: t('act_url') },
+            ] } },
+          },
+          ...(action === 'more-info' ? [{ name: `${k}_entity`, selector: { entity: {} }, helper: k === 'tap' ? tapHelper : holdHelper }] : []),
+          ...(action === 'navigate' ? [{ name: `${k}_path`, selector: { navigation: {} } }] : []),
+          ...(action === 'url' ? [{ name: `${k}_path`, selector: { text: { type: 'url' } } }] : []),
+        ];
+      });
+      return { data, schema, labels };
+    };
+    const actionsFromForm = (v: Data): ActionsConfig => compact({
+      tap_action: actionFromForm(v, 'tap', 'more-info'), hold_action: actionFromForm(v, 'hold'),
+      double_tap_action: actionFromForm(v, 'double_tap'),
     });
+    const batteryActions = actionForm(cfg.battery, 'h_tap_entity', 'h_hold_entity');
+    /** A bank: its entities, then its own actions in a collapsed panel. The entity form knows nothing of the actions, so they are carried over. */
+    const bankBody = (b: BankConfig, i: number): TemplateResult => {
+      const f = bankToForm(b);
+      const { tap_action, hold_action, double_tap_action, ...entities } = b;
+      const a = actionForm(b, 'h_bank_tap_entity', 'h_bank_hold_entity');
+      return html`
+        ${this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i,
+          { ...bankFromForm(v as BankForm), ...compact({ tap_action, hold_action, double_tap_action }) })))}
+        ${this.subPanel(`bank-${i}-actions`, t('actions'), this.form(`bank-${i}-actions`, a.data, a.schema,
+          (v) => setBanks(replaceItem(banks, i, { ...entities, ...actionsFromForm(v) })), a.labels))}`;
+    };
     /** The grid entity form knows nothing of the name options, so they are carried over here. */
     const setGrid = (next: CardConfig['grid']) => {
       // Read the latest config: two changes can land before the next render.
@@ -246,7 +272,13 @@ export class PowerFlowMultiCardEditor extends LitElement {
       ...powerSchema(f.mode, [{ name: 'power', selector: sensor, helper: 'h_power' }],
         [{ name: 'charge', selector: sensor }, { name: 'discharge', selector: sensor }], t),
       { name: 'soc', selector: sensor },
-      { name: 'capacity', selector: { number: { min: 0, step: 0.1, mode: 'box', unit_of_measurement: 'kWh' } } },
+      {
+        name: 'capacity_mode',
+        selector: { select: { mode: 'box', options: [{ value: 'value', label: t('cap_value') }, { value: 'entity', label: t('cap_entity') }] } },
+      },
+      f.capacity_mode === 'entity'
+        ? { name: 'capacity_entity', selector: { entity: { filter: { domain: ['sensor', 'number', 'input_number'] } } }, helper: 'h_capacity_entity' }
+        : { name: 'capacity', selector: { number: { min: 0, step: 0.1, mode: 'box', unit_of_measurement: 'kWh' } } },
       { name: 'invert', selector: { boolean: {} } },
     ];
     const deviceSchema: Schema[] = [
@@ -318,13 +350,10 @@ export class PowerFlowMultiCardEditor extends LitElement {
           (v) => setBattery({ show_name: v.show_name, name_inside: v.name_inside, grid_link: v.grid_link }), nameLabels)}
         ${this.subPanel('banks', `${t('banks')} (${banks.length})`, this.list<BankConfig>('banks', banks,
           (b) => b.name || (typeof b.power === 'string' ? this.name(b.power, undefined) : ''),
-          (b, i) => { const f = bankToForm(b); return this.form(`bank-${i}`, f, bankSchema(f), (v) => setBanks(replaceItem(banks, i, bankFromForm(v as BankForm)))); },
-          setBanks, () => ({ power: '', soc: '' }), false))}
-        ${banks.length ? this.subPanel('actions', t('actions'), this.form('battery-actions', actionData, actionSchema,
-          (v) => setBattery({
-            tap_action: actionFromForm(v, 'tap', 'more-info'), hold_action: actionFromForm(v, 'hold'),
-            double_tap_action: actionFromForm(v, 'double_tap'),
-          }), actionLabels)) : nothing}`)}
+          bankBody, setBanks, () => ({ power: '', soc: '' }), false))}
+        ${banks.length ? this.subPanel('actions', t('actions'), this.form('battery-actions', batteryActions.data, batteryActions.schema,
+          (v) => setBattery({ tap_action: undefined, hold_action: undefined, double_tap_action: undefined, ...actionsFromForm(v) }),
+          batteryActions.labels)) : nothing}`)}
 
       ${this.panel('home', 'mdi:home', this.form('home', { ...compact({ entity: cfg.home?.entity }), show_consumers: cfg.home?.show_consumers !== false },
         [{ name: 'entity', selector: sensor, helper: 'h_home' }, { name: 'show_consumers', selector: { boolean: {} }, helper: 'h_show_consumers' }],
@@ -365,6 +394,9 @@ export class PowerFlowMultiCardEditor extends LitElement {
       border: 1px solid var(--divider-color, #444);
       border-radius: 8px;
       padding: 4px 8px 8px;
+    }
+    .item ha-expansion-panel {
+      margin-top: 8px;
     }
     .item-header {
       display: flex;

@@ -70,7 +70,7 @@ battery:
     - power: sensor.bat1_power       # + discharge, − charge (or {charge, discharge})
       soc: sensor.bat1_soc
       name: Bank 1
-      capacity: 5                    # kWh, optional
+      capacity: 5                    # kWh or an entity, optional
     - power: sensor.bat2_power
       soc: sensor.bat2_soc
       name: Bank 2
@@ -117,7 +117,7 @@ consumers:
 | `solar.show_idle_sources` | `false` | Keeps the source pills visible while solar is idle (total below 10 W); by default they are hidden |
 | `battery.show_name` | `true` | Shows the "Battery" name; `false` hides it |
 | `battery.name_inside` | `true` | Writes "Battery" inside the circle; `false` puts it outside |
-| `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh), `invert` |
+| `battery.banks[]` | — | `power` (+ discharge) or `{charge, discharge}`, `soc`, `name`, `capacity` (kWh, or an entity reporting it in Wh, kWh or MWh; weights the battery's state of charge), `invert`, and `tap_action`, `hold_action`, `double_tap_action` for the bank's own pill (as on the battery, defaulting to that bank's `power` and `soc`) |
 | `battery.grid_link` | `true` | Flows between battery and grid; `false` (battery can neither charge from nor export to the grid) never attributes them and hides the line between the two |
 | `battery.tap_action` | more-info of the first bank's power | What a tap on the battery circle does: `{action: more-info, entity: …}`, `{action: navigate, navigation_path: …}`, `{action: url, url_path: …}` or `{action: none}` |
 | `battery.hold_action` | — | What a long press on the battery circle does; same actions, and `more-info` defaults to the first bank's `soc` |

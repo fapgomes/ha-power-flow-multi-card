@@ -65,7 +65,9 @@ export function gridFromForm(f: GridForm): CardConfig['grid'] {
 
 export interface BankForm {
   mode: PowerMode; power?: string; charge?: string; discharge?: string; soc?: string;
-  name?: string; capacity?: number; invert?: boolean;
+  name?: string; invert?: boolean;
+  /** The capacity is either typed in (kWh) or read from an entity. */
+  capacity_mode?: 'value' | 'entity'; capacity?: number; capacity_entity?: string;
 }
 
 export function bankToForm(b: BankConfig): BankForm {
@@ -73,12 +75,17 @@ export function bankToForm(b: BankConfig): BankForm {
   const power = typeof p === 'object'
     ? { mode: 'split' as const, charge: p.charge, discharge: p.discharge }
     : { mode: 'single' as const, power: p };
-  return compact({ ...power, soc: b.soc, name: b.name, capacity: b.capacity, invert: b.invert }) as BankForm;
+  const capacity = typeof b.capacity === 'string'
+    ? { capacity_mode: 'entity' as const, capacity_entity: b.capacity }
+    : { capacity_mode: 'value' as const, capacity: b.capacity };
+  return compact({ ...power, soc: b.soc, name: b.name, ...capacity, invert: b.invert }) as BankForm;
 }
 
 export function bankFromForm(f: BankForm): BankConfig {
   const power = f.mode === 'split' ? { charge: f.charge ?? '', discharge: f.discharge ?? '' } : f.power ?? '';
-  return { power, soc: f.soc ?? '', ...compact({ name: f.name, capacity: f.capacity, invert: f.invert }) };
+  // An empty entity is kept, so the form stays on the sensor until one is picked.
+  const capacity = f.capacity_mode === 'entity' ? { capacity: f.capacity_entity ?? '' } : compact({ capacity: f.capacity });
+  return { power, soc: f.soc ?? '', ...compact({ name: f.name }), ...capacity, ...compact({ invert: f.invert }) };
 }
 
 export type ActionKey = 'tap' | 'hold' | 'double_tap';

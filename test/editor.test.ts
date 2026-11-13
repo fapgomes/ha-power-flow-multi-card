@@ -208,6 +208,33 @@ describe('editor', () => {
     expect(last(changes).battery).not.toHaveProperty('tap_action');
   });
 
+  it('edits the actions of a bank and keeps them through other changes', async () => {
+    const names = (el: Editor) => (form(el, 'bank-0-actions') as unknown as { schema: { name: string; helper?: string }[] }).schema;
+    const { el, changes } = await mount(base);
+    const bank = base.battery!.banks[0];
+    expect(form(el, 'bank-0-actions').data).toEqual({ tap: 'more-info', hold: 'none', double_tap: 'none' });
+    expect(names(el).find((s) => s.name === 'tap_entity')!.helper).toBe('h_bank_tap_entity');
+    const panel = el.shadowRoot!.querySelector('ha-expansion-panel[data-panel="bank-0-actions"]') as HTMLElement & { header: string; expanded?: boolean };
+    expect(panel.header).toBe('Interações');
+    expect(panel.expanded).toBeFalsy();
+    change(el, 'bank-0-actions', { ...form(el, 'bank-0-actions').data, hold: 'navigate', hold_path: '/lovelace-energia/bateria' });
+    const hold_action = { action: 'navigate', navigation_path: '/lovelace-energia/bateria' };
+    expect(last(changes).battery).toEqual({ banks: [{ ...bank, hold_action }] });
+    await el.updateComplete;
+    // Editing the bank's entities or the battery keeps it.
+    change(el, 'bank-0', { ...form(el, 'bank-0').data, capacity: 10 });
+    expect(last(changes).battery!.banks[0]).toEqual({ ...bank, capacity: 10, hold_action });
+    await el.updateComplete;
+    change(el, 'battery-actions', { ...form(el, 'battery-actions').data, double_tap: 'more-info' });
+    expect(last(changes).battery).toEqual({ banks: [{ ...bank, capacity: 10, hold_action }], double_tap_action: { action: 'more-info' } });
+    await el.updateComplete;
+    change(el, 'bank-0-actions', { ...form(el, 'bank-0-actions').data, tap: 'none', hold: 'none' });
+    expect(last(changes).battery!.banks[0]).toEqual({ ...bank, capacity: 10, tap_action: { action: 'none' } });
+    await el.updateComplete;
+    change(el, 'bank-0-actions', { ...form(el, 'bank-0-actions').data, tap: 'more-info' });
+    expect(last(changes).battery!.banks[0]).toEqual({ ...bank, capacity: 10 });
+  });
+
   it('keeps the banks and the battery actions in collapsed panels', async () => {
     const { el } = await mount(base);
     const panel = (key: string) => el.shadowRoot!.querySelector(`[data-panel="battery"] ha-expansion-panel[data-panel="${key}"]`) as (HTMLElement & { header: string; expanded?: boolean }) | null;
@@ -228,6 +255,22 @@ describe('editor', () => {
     const { el, changes } = await mount(base);
     change(el, 'bank-0', { mode: 'split', charge: 'sensor.c', discharge: 'sensor.d', soc: 'sensor.soc1', capacity: 5 });
     expect(last(changes).battery!.banks[0]).toEqual({ power: { charge: 'sensor.c', discharge: 'sensor.d' }, soc: 'sensor.soc1', capacity: 5 });
+  });
+
+  it('takes the capacity of a bank from a typed value or from a sensor', async () => {
+    const names = (el: Editor) => (form(el, 'bank-0') as unknown as { schema: { name: string }[] }).schema.map((s) => s.name);
+    const { el, changes } = await mount(base);
+    expect(form(el, 'bank-0').data).toMatchObject({ capacity_mode: 'value' });
+    expect(names(el)).toContain('capacity');
+    change(el, 'bank-0', { ...form(el, 'bank-0').data, capacity_mode: 'entity' });
+    await el.updateComplete;
+    expect(names(el)).toContain('capacity_entity');
+    expect(names(el)).not.toContain('capacity');
+    change(el, 'bank-0', { ...form(el, 'bank-0').data, capacity_entity: 'sensor.cap' });
+    expect(last(changes).battery!.banks[0]).toEqual({ ...base.battery!.banks[0], capacity: 'sensor.cap' });
+    await el.updateComplete;
+    change(el, 'bank-0', { ...form(el, 'bank-0').data, capacity_mode: 'value' });
+    expect(last(changes).battery!.banks[0]).toEqual(base.battery!.banks[0]);
   });
 
   it('does not throw on an incomplete config', async () => {

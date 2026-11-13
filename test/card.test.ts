@@ -485,6 +485,47 @@ describe('power-flow-multi-card', () => {
       expect(ids).toEqual(['sensor.b1', 'sensor.soc1']);
     });
 
+    it('runs the actions of each bank on its own pill', async () => {
+      const banks = full.battery!.banks;
+      const el = await mount({ ...full, battery: { banks: [
+        { ...banks[0], hold_action: { action: 'more-info' }, double_tap_action: { action: 'more-info', entity: 'sensor.soc_all' } },
+        { ...banks[1], tap_action: { action: 'more-info', entity: 'sensor.other' }, hold_action: { action: 'more-info' } },
+      ] } }, fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const [first, second] = q(el, '[data-node="bank"]');
+      // A hold opens that bank's state of charge by default.
+      press(second, 'pointerdown');
+      vi.advanceTimersByTime(500);
+      press(second, 'pointerup');
+      click(second);
+      expect(ids).toEqual(['sensor.soc2']);
+      click(second);
+      expect(ids).toEqual(['sensor.soc2', 'sensor.other']);
+      // The first bank waits for a double tap; its tap keeps the default.
+      click(first);
+      vi.advanceTimersByTime(250);
+      expect(ids).toEqual(['sensor.soc2', 'sensor.other', 'sensor.b1']);
+      click(first);
+      click(first);
+      vi.advanceTimersByTime(1000);
+      expect(ids).toEqual(['sensor.soc2', 'sensor.other', 'sensor.b1', 'sensor.soc_all']);
+    });
+
+    it('does not take taps on two different nodes for a double tap', async () => {
+      const banks = full.battery!.banks.map((b) => ({ ...b, double_tap_action: { action: 'more-info' as const } }));
+      const el = await mount({ ...full, battery: { banks } }, fullStates);
+      const ids = opened(el);
+      vi.useFakeTimers();
+      const [first, second] = q(el, '[data-node="bank"]');
+      click(first);
+      vi.advanceTimersByTime(100);
+      click(second);
+      expect(ids).toEqual(['sensor.b1']);
+      vi.advanceTimersByTime(250);
+      expect(ids).toEqual(['sensor.b1', 'sensor.b2']);
+    });
+
     it('does nothing on a long press without a hold action', async () => {
       const el = await mount(full, fullStates);
       const ids = opened(el);

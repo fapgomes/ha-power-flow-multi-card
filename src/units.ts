@@ -12,6 +12,16 @@ export function toWatts(state: string | undefined, unit: string | undefined): nu
   return value * factor;
 }
 
+const ENERGY: Record<string, number> = { wh: 0.001, kwh: 1, mwh: 1000 };
+
+/** Converts an entity state to kWh (the unit assumed when there is none); null when the state is not a number. */
+export function toKwh(state: string | undefined, unit: string | undefined): number | null {
+  if (state === undefined || state.trim() === '') return null;
+  const value = Number(state);
+  if (!Number.isFinite(value)) return null;
+  return value * (ENERGY[(unit ?? 'kWh').trim().toLowerCase()] ?? 1);
+}
+
 export function formatPower(w: number): string {
   const abs = Math.round(Math.abs(w));
   return abs < 1000 ? `${abs} W` : `${(abs / 1000).toFixed(1)} kW`;

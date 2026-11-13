@@ -1,6 +1,6 @@
 import { geometryFor } from './geometry';
 import type { BankPower, CardConfig, HassLike, Readings } from './types';
-import { toWatts } from './units';
+import { toKwh, toWatts } from './units';
 
 export const DEFAULT_CONSUMER_COLOR = '#9e9e9e';
 
@@ -55,6 +55,15 @@ function number(hass: HassLike, entity: string | undefined): number | null {
   return Number.isFinite(n) ? n : null;
 }
 
+/** A bank's capacity in kWh: the number written in the config, or the state of the entity named there. */
+function capacity(hass: HassLike, c: number | string | undefined): number | null {
+  if (c === undefined || c === '') return null;
+  const n = Number(c);
+  if (Number.isFinite(n)) return n;
+  const s = hass.states[c as string];
+  return s ? toKwh(s.state, s.attributes?.unit_of_measurement) : null;
+}
+
 function friendlyName(hass: HassLike, entity: string): string {
   return hass.states[entity]?.attributes?.friendly_name ?? entity;
 }
@@ -104,9 +113,11 @@ export function readState(hass: HassLike, config: CardConfig): Readings {
   });
   const batteryNet = banks.length ? sum(banks.map((b) => b.w)) : null;
   let batterySoc: number | null = null;
-  const withSoc = banks.map((b, i) => ({ soc: b.soc, cap: bankCfgs[i].capacity })).filter((b) => b.soc !== null);
+  const caps = bankCfgs.map((b) => capacity(hass, b.capacity));
+  const withSoc = banks.map((b, i) => ({ soc: b.soc, cap: caps[i] })).filter((b) => b.soc !== null);
   if (withSoc.length) {
-    const weighted = bankCfgs.every((b) => b.capacity && b.capacity > 0);
+    // Weighted only when every bank has a capacity, so a sensor that drops out falls back to the plain average.
+    const weighted = caps.every((c) => c !== null && c > 0);
     const totalCap = weighted ? sum(withSoc.map((b) => b.cap!)) : withSoc.length;
     batterySoc = sum(withSoc.map((b) => b.soc! * (weighted ? b.cap! : 1))) / totalCap;
   }

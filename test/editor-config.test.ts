@@ -54,8 +54,20 @@ describe('grid form', () => {
 describe('bank form', () => {
   it('round-trips a signed bank with every option', () => {
     const b = { power: 'sensor.p', soc: 'sensor.s', name: 'B1', capacity: 5, invert: true };
-    expect(bankToForm(b)).toEqual({ mode: 'single', power: 'sensor.p', soc: 'sensor.s', name: 'B1', capacity: 5, invert: true });
+    expect(bankToForm(b)).toEqual({ mode: 'single', power: 'sensor.p', soc: 'sensor.s', name: 'B1', capacity_mode: 'value', capacity: 5, invert: true });
     expect(bankFromForm(bankToForm(b))).toEqual(b);
+  });
+
+  it('round-trips a capacity read from an entity, and keeps the choice before one is picked', () => {
+    const b = { power: 'sensor.p', soc: 'sensor.s', capacity: 'sensor.cap' };
+    expect(bankToForm(b)).toEqual({ mode: 'single', power: 'sensor.p', soc: 'sensor.s', capacity_mode: 'entity', capacity_entity: 'sensor.cap' });
+    expect(bankFromForm(bankToForm(b))).toEqual(b);
+    // Switching to the sensor leaves the typed value in the form; it is not what gets stored.
+    const picking = bankFromForm({ mode: 'single', power: 'sensor.p', soc: 'sensor.s', capacity_mode: 'entity', capacity: 5 });
+    expect(picking).toEqual({ power: 'sensor.p', soc: 'sensor.s', capacity: '' });
+    expect(bankToForm(picking).capacity_mode).toBe('entity');
+    expect(bankFromForm({ mode: 'single', power: 'sensor.p', soc: 'sensor.s', capacity_mode: 'value', capacity_entity: 'sensor.cap' }))
+      .toEqual({ power: 'sensor.p', soc: 'sensor.s' });
   });
 
   it('round-trips a charge/discharge bank and drops empty optionals', () => {

@@ -69,6 +69,14 @@ describe('battery', () => {
     const r = readState(hass(states), { ...base, battery: { banks: [{ ...banks[0], capacity: 5 }, { ...banks[1], capacity: 15 }] } });
     expect(r.batterySoc).toBe(59);
   });
+  it('reads the capacity from an entity, in its unit', () => {
+    const cfg = { ...base, battery: { banks: [{ ...banks[0], capacity: 'sensor.cap1' }, { ...banks[1], capacity: 15 }] } };
+    expect(readState(hass({ ...states, 'sensor.cap1': ['5000', 'Wh'] }), cfg).batterySoc).toBe(59);
+    expect(readState(hass({ ...states, 'sensor.cap1': ['5'] }), cfg).batterySoc).toBe(59);
+    // Without a reading the banks weigh the same.
+    expect(readState(hass({ ...states, 'sensor.cap1': ['unavailable', 'kWh'] }), cfg).batterySoc).toBe(60);
+    expect(readState(hass(states), cfg).batterySoc).toBe(60);
+  });
   it('charge/discharge entities', () => {
     const r = readState(hass({ 'sensor.c': ['100', 'W'], 'sensor.d': ['0', 'W'], 'sensor.soc1': ['50'] }),
       { ...base, battery: { banks: [{ power: { charge: 'sensor.c', discharge: 'sensor.d' }, soc: 'sensor.soc1' }] } });

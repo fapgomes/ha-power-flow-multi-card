@@ -69,6 +69,8 @@ export class PowerFlowMultiCard extends LitElement {
   private labelRects: Rect[] = [];
   private holdTimer?: ReturnType<typeof setTimeout>;
   private tapTimer?: ReturnType<typeof setTimeout>;
+  /** The tap waiting for a second one: the node it landed on and what it does if none follows. */
+  private pendingTap?: { key: string; run: () => void };
   /** A hold action ran on the current press, so the click that ends it is not a tap. */
   private held = false;
 
@@ -208,6 +210,8 @@ export class PowerFlowMultiCard extends LitElement {
       tap?: ActionConfig;
       /** Actions of a long press and a double tap, and the entity their more-info falls back to. */
       hold?: ActionConfig; doubleTap?: ActionConfig; holdEntity?: string;
+      /** Tells this node from the others of its kind (default: the entity). */
+      nodeKey?: string;
     } = {},
   ): SVGTemplateResult {
     const fs = opts.fontSize ?? 10;
@@ -224,17 +228,23 @@ export class PowerFlowMultiCard extends LitElement {
     const hold = opts.hold && opts.hold.action !== 'none' ? opts.hold : undefined;
     const double = opts.doubleTap && opts.doubleTap.action !== 'none' ? opts.doubleTap : undefined;
     const runTap = () => (opts.tap ? this.runAction(opts.tap, entity) : this.moreInfo(entity));
+    const key = `${kind}:${opts.nodeKey ?? entity ?? ''}`;
     const tap = () => {
       // The click that ends a hold is not a tap.
       if (hold && this.held) { this.held = false; return; }
+      const pending = this.pendingTap;
+      clearTimeout(this.tapTimer);
+      this.tapTimer = undefined;
+      this.pendingTap = undefined;
+      // A tap on another node is no second tap: the one that was waiting acts now.
+      if (pending && pending.key !== key) pending.run();
       if (!double) { runTap(); return; }
       // With a double tap action, a tap waits to see whether a second one follows.
-      if (this.tapTimer !== undefined) {
-        clearTimeout(this.tapTimer);
-        this.tapTimer = undefined;
+      if (pending?.key === key) {
         this.runAction(double, opts.holdEntity ?? entity);
       } else {
-        this.tapTimer = setTimeout(() => { this.tapTimer = undefined; runTap(); }, DOUBLE_TAP_MS);
+        this.pendingTap = { key, run: runTap };
+        this.tapTimer = setTimeout(() => { this.tapTimer = undefined; this.pendingTap = undefined; runTap(); }, DOUBLE_TAP_MS);
       }
     };
     const leave = hold || hover ? () => { this.cancelHold(); if (hover) this.hovered = undefined; } : undefined;
@@ -472,9 +482,13 @@ export class PowerFlowMultiCard extends LitElement {
       }));
       bankPills.forEach((p, i) => {
         const b = r.banks[i];
+        const bank = cfg.battery!.banks[i];
         nodes.push(this.node('bank', b.entity, p, COLORS.batteryDischarge,
           [{ text: b.soc === null ? DASH : `${Math.round(b.soc)}%` }],
-          { title: `${b.name}: ${b.soc === null ? DASH : `${Math.round(b.soc)}%`} · ${fmt(b.w)}`, fontSize: Math.min(10, p.r * 0.62), strokeWidth: 1.5 }));
+          {
+            title: `${b.name}: ${b.soc === null ? DASH : `${Math.round(b.soc)}%`} · ${fmt(b.w)}`, fontSize: Math.min(10, p.r * 0.62), strokeWidth: 1.5,
+            tap: bank.tap_action, hold: bank.hold_action, doubleTap: bank.double_tap_action, holdEntity: bank.soc, nodeKey: String(i),
+          }));
       });
     }
     const rings: SVGTemplateResult[] = [];
